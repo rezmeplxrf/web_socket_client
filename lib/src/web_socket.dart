@@ -179,7 +179,7 @@ class WebSocket {
       if (_channel != null) {
         completer.complete();
       } else {
-        Future.delayed(Duration(milliseconds: 10), checkChannel);
+        Future.delayed(Duration(milliseconds: 50), checkChannel);
       }
     }
 

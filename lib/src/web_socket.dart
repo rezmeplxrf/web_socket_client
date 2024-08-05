@@ -163,7 +163,7 @@ class WebSocket {
     });
   }
 
-      Future<void> ready() async {
+  Future<void> ready() async {
     if (_channel == null) {
       await _waitForChannel();
     }

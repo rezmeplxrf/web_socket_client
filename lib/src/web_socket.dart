@@ -162,4 +162,28 @@ class WebSocket {
       _connectionController.close();
     });
   }
+
+      Future<void> ready() async {
+    if (_channel == null) {
+      await _waitForChannel();
+    }
+    await _channel!.ready;
+  }
+
+  Future<void> _waitForChannel() {
+    if (_channel != null) return Future.value();
+
+    final completer = Completer<void>();
+
+    void checkChannel() {
+      if (_channel != null) {
+        completer.complete();
+      } else {
+        Future.delayed(Duration(milliseconds: 10), checkChannel);
+      }
+    }
+
+    checkChannel();
+    return completer.future;
+  }
 }

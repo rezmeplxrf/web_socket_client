@@ -1,16 +1,16 @@
 name: web_socket_client
 description: A simple WebSocket client for Dart which includes automatic reconnection logic.
 repository: https://github.com/felangel/web_socket_client
-version: 0.1.6
+version: 0.1.7
 topics: [web-socket, web-socket-client]
 funding: [https://github.com/sponsors/felangel]
 
 environment:
-  sdk: ">=3.3.0 <4.0.0"
+  sdk: ^3.5.0
 
 dependencies:
-  web: ">=0.5.0 <2.0.0"
-  web_socket_channel: ">=2.4.5 <4.0.0"
+  web: ^1.1.0
+  web_socket_channel: ^3.0.2
 
 dev_dependencies:
   mocktail: ^1.0.0

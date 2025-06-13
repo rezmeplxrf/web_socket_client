@@ -31,6 +31,7 @@ Future<WebSocket> connect(
 
   unawaited(
     socket.onError.first.then((event) {
+      // ignore: invalid_runtime_check_with_js_interop_types
       final error = event is ErrorEvent ? event.error : null;
       completer.completeError(error ?? 'unknown error');
     }),

@@ -76,6 +76,7 @@ class WebSocket {
   void attemptToReconnect([Object? error, StackTrace? stackTrace]) {
     if (_isClosedByClient || _isReconnecting || _isDisconnecting) return;
     if (_backoffDuration >= _timeout) return _closeWithTimeout();
+
     _connectionController.add(
       Disconnected(
         code: _channel?.closeCode,
@@ -87,9 +88,6 @@ class WebSocket {
     _channel = null;
     // If NoBackoff is used, do not attempt to reconnect.
     if (_backoff is NoBackoff) {
-      _connectionController.add(const Disconnected(
-        code: 1000,
-      ));
       _subscription?.cancel();
       _connectionController.close();
       _isClosedByClient = true;
@@ -121,15 +119,16 @@ class WebSocket {
         onDone: attemptToReconnect,
         cancelOnError: true,
       );
-      await _channel!.ready;
-      final connectionState = _connectionController.state;
-      switch (connectionState) {
-        case Reconnecting():
-          _connectionController.add(const Reconnected());
-        case Connecting():
-          _connectionController.add(const Connected());
-        default:
-      }
+      unawaited(_channel!.ready.whenComplete(() {
+        final connectionState = _connectionController.state;
+        switch (connectionState) {
+          case Reconnecting():
+            _connectionController.add(const Reconnected());
+          case Connecting():
+            _connectionController.add(const Connected());
+          default:
+        }
+      }));
     } catch (error, stackTrace) {
       attemptToReconnect(error, stackTrace);
     }

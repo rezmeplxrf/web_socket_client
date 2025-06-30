@@ -63,18 +63,19 @@ class WebSocket {
         connectionState is Disconnecting;
   }
 
-  bool get _isReconnecting {
-    return _connectionController.state == const Reconnecting();
-  }
-
-  bool get _isDisconnecting {
-    return _connectionController.state == const Disconnecting();
-  }
-
   bool _isClosedByClient = false;
 
   void attemptToReconnect([Object? error, StackTrace? stackTrace]) {
-    if (_isClosedByClient || _isReconnecting || _isDisconnecting) return;
+    if (_isClosedByClient) {
+      return;
+    }
+    switch (_connectionController.state) {
+      case Disconnecting():
+      case Reconnecting():
+        return;
+      default:
+    }
+
     if (_backoffDuration >= _timeout) return _closeWithTimeout();
 
     _connectionController.add(

@@ -124,17 +124,17 @@ class WebSocket {
         onDone: attemptToReconnect,
         cancelOnError: true,
       );
-      unawaited(_channel!.ready.whenComplete(() {
-        print('WebSocket connection established: $_uri');
-        final connectionState = _connectionController.state;
-        switch (connectionState) {
-          case Reconnecting():
-            _connectionController.add(const Reconnected());
-          case Connecting():
-            _connectionController.add(const Connected());
-          default:
-        }
-      }));
+      await _channel!.ready;
+      print(
+          'WebSocket connection established with protocols: ${_channel?.protocol}');
+      final connectionState = _connectionController.state;
+      switch (connectionState) {
+        case Reconnecting():
+          _connectionController.add(const Reconnected());
+        case Connecting():
+          _connectionController.add(const Connected());
+        default:
+      }
     } catch (error, stackTrace) {
       attemptToReconnect(error, stackTrace);
     }

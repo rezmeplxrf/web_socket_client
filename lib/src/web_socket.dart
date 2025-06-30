@@ -1,13 +1,11 @@
 import 'dart:async';
 
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel.dart'
     if (dart.library.io) 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel_io.dart'
     if (dart.library.js_interop) 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel_html.dart';
 import 'package:web_socket_client/src/_web_socket_connect/_web_socket_connect.dart'
     if (dart.library.io) 'package:web_socket_client/src/_web_socket_connect/_web_socket_connect_io.dart'
     if (dart.library.js_interop) 'package:web_socket_client/src/_web_socket_connect/_web_socket_connect_html.dart';
-import 'package:web_socket_client/src/backoff/backoff.dart';
 import 'package:web_socket_client/src/connection.dart';
 import 'package:web_socket_client/web_socket_client.dart';
 
@@ -90,7 +88,12 @@ class WebSocket {
     );
     _channel = null;
     // If NoBackoff is used, do not attempt to reconnect.
-    if (_backoff is NoBackoff) return;
+    if (_backoff is NoBackoff) {
+      _connectionController.add(const Disconnected(
+        code: 1000, // Normal closure
+      ));
+      return;
+    }
     _reconnect();
   }
 
@@ -105,21 +108,26 @@ class WebSocket {
         pingInterval: _pingInterval,
         binaryType: _binaryType,
       ).timeout(_timeout);
-      switch (_connectionController.state) {
-        case Connected():
-        case Reconnected():
-          _connectionController.add(_connectionController.state);
-        default:
-      }
 
       _channel = getWebSocketChannel(ws);
+
       _subscription?.cancel().ignore();
       _subscription = _channel!.stream.listen(
         _onMessage,
         onDone: attemptToReconnect,
         cancelOnError: true,
       );
-    } on Exception catch (error, stackTrace) {
+      await _channel!.ready.whenComplete(() {
+        final connectionState = _connectionController.state;
+        switch (connectionState) {
+          case Reconnecting():
+            _connectionController.add(const Reconnected());
+          case Connecting():
+            _connectionController.add(const Connected());
+          default:
+        }
+      });
+    } catch (error, stackTrace) {
       attemptToReconnect(error, stackTrace);
     }
   }
@@ -178,45 +186,5 @@ class WebSocket {
       _subscription?.cancel();
       _connectionController.close();
     });
-  }
-
-  /// Convienience method to check if the connection is ready.
-  Future<void> ready({Duration timeout = const Duration(seconds: 15)}) async {
-    if (_channel == null) {
-      await _waitForChannel(timeout: timeout);
-    }
-    await _channel!.ready.timeout(timeout, onTimeout: () {
-      throw TimeoutException(
-          'WebSocket connection did not become ready in time.');
-    });
-  }
-
-  Future<void> _waitForChannel(
-      {Duration timeout = const Duration(seconds: 10)}) {
-    if (_channel != null) return Future.value();
-
-    final completer = Completer<void>();
-    final timeoutTimer = Timer(timeout, () {
-      if (!completer.isCompleted) {
-        completer.completeError(
-          TimeoutException('WebSocket channel did not become ready in time.'),
-        );
-      }
-    });
-
-    // Listen for changes in the connection state
-    final subscription = _connectionController.listen((state) {
-      if (state is Connected || state is Reconnected) {
-        if (!completer.isCompleted) {
-          timeoutTimer.cancel();
-          completer.complete();
-        }
-      }
-    });
-
-    // Ensure the subscription is canceled when the completer completes
-    completer.future.whenComplete(subscription.cancel);
-
-    return completer.future;
   }
 }

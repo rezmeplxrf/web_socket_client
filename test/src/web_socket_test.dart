@@ -4,7 +4,6 @@ import 'dart:io' as io;
 import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';
 import 'package:web_socket_channel/io.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_client/web_socket_client.dart';
 
 class _MockBackoff extends Mock implements Backoff {}

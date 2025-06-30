@@ -88,8 +88,14 @@ class WebSocket {
     // If NoBackoff is used, do not attempt to reconnect.
     if (_backoff is NoBackoff) {
       _connectionController.add(const Disconnected(
-        code: 1000, // Normal closure
+        code: 1000,
       ));
+      _subscription?.cancel();
+      _connectionController.close();
+      _isClosedByClient = true;
+      _backoffTimer?.cancel();
+      _backoffDuration = Duration.zero;
+
       return;
     }
     _reconnect();

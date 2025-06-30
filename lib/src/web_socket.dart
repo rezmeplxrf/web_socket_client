@@ -54,7 +54,6 @@ class WebSocket {
   StreamSubscription<dynamic>? _subscription;
 
   Timer? _backoffTimer;
-  Duration _backoffDuration = Duration.zero;
 
   WebSocketChannel? _channel;
 
@@ -72,8 +71,7 @@ class WebSocket {
 
   void attemptToReconnect([Object? error, StackTrace? stackTrace]) {
     if (_isClosedByClient) return;
-    final connectionState = _connectionController.state;
-    switch (connectionState) {
+    switch (_connectionController.state) {
       case Disconnecting():
       case Reconnecting():
         return;
@@ -130,6 +128,7 @@ class WebSocket {
       switch (connectionState) {
         case Reconnecting():
           _connectionController.add(const Reconnected());
+          _backoff.reset();
         case Connecting():
           _connectionController.add(const Connected());
         default:
@@ -140,27 +139,22 @@ class WebSocket {
   }
 
   Future<void> _reconnect() async {
-    if (_backoffDuration >= _timeout) return _closeWithTimeout();
     if (_isClosedByClient || _isConnected) return;
     if (_backoff is NoBackoff) return;
-
     _connectionController.add(const Reconnecting());
-
-    await init();
-    if (_isClosedByClient) {
-      _backoff.reset();
-      _backoffTimer?.cancel();
-      _backoffDuration = Duration.zero;
-      return;
-    }
-
+    final backoffDuration = _backoff.next();
     _backoffTimer?.cancel();
-    final next = _backoff.next();
-    _backoffDuration = _backoffDuration + next;
-    _backoffTimer = Timer(next, _reconnect);
+    _backoffTimer = Timer(backoffDuration, () async {
+      await init();
+      if (_isClosedByClient) {
+        await close();
+        return;
+      }
+      if (!_isConnected) {
+        await _reconnect();
+      }
+    });
   }
-
-  void _closeWithTimeout() => close(1006, 'connection timeout');
 
   /// The WebSocket [Connection].
   Connection get connection => _connectionController;
@@ -181,7 +175,7 @@ class WebSocket {
     if (_isClosedByClient) return;
     _isClosedByClient = true;
     _backoffTimer?.cancel();
-    _backoffDuration = Duration.zero;
+    _backoff.reset();
     if (_isConnected) _connectionController.add(const Disconnecting());
 
     await _channel?.sink.close(code, reason);

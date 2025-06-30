@@ -99,20 +99,13 @@ class WebSocket {
   }
 
   Future<void> init() async {
-    // Only reset backoff if closed by client.
-    if (_isClosedByClient) {
-      _backoff.reset();
+    if (_isClosedByClient || _isConnected) {
       _backoffTimer?.cancel();
-      _backoffDuration = Duration.zero;
-      return;
-    }
-    if (_isConnected) {
       return;
     }
     if (_channel == null) {
       _connectionController.add(const Connecting());
     }
-
     try {
       _channel = null;
       final ws = await connect(
@@ -148,7 +141,8 @@ class WebSocket {
           _connectionController.add(const Connected());
         default:
       }
-      // Do NOT reset backoff here; let it continue unless closed by client.
+
+      _backoffTimer?.cancel();
     } catch (error, stackTrace) {
       attemptToReconnect(error, stackTrace);
     }
@@ -163,15 +157,7 @@ class WebSocket {
     _connectionController.add(const Reconnecting());
 
     await init();
-    if (_isClosedByClient || _isConnected) {
-      // Only reset backoff if closed by client.
-      if (_isClosedByClient) {
-        _backoff.reset();
-        _backoffTimer?.cancel();
-        _backoffDuration = Duration.zero;
-      }
-      return;
-    }
+
     _backoffTimer?.cancel();
     final next = _backoff.next();
     _backoffDuration = _backoffDuration + next;
@@ -199,14 +185,15 @@ class WebSocket {
     if (_isClosedByClient) return;
     print('Closing WebSocket connection: $code, $reason');
     _isClosedByClient = true;
-    _backoff.reset();
     _backoffTimer?.cancel();
     _backoffDuration = Duration.zero;
     if (_isConnected) _connectionController.add(const Disconnecting());
+
     await _channel?.sink.close(code, reason);
     await _subscription?.cancel();
     _subscription = null;
     _channel = null;
+
     _connectionController
       ..add(Disconnected(code: code, reason: reason))
       ..close();

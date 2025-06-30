@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 
 import 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel.dart'
@@ -178,6 +180,7 @@ class WebSocket {
   /// Closes the connection and frees any resources.
   Future<void> close([int? code, String? reason]) async {
     if (_isClosedByClient) return;
+    print('Closing WebSocket connection: $code, $reason');
     _isClosedByClient = true;
     _backoffTimer?.cancel();
     _backoffDuration = Duration.zero;

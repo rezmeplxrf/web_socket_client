@@ -1,3 +1,5 @@
+export 'package:web_socket_channel/web_socket_channel.dart';
+
 export 'src/backoff/backoff.dart' show Backoff;
 export 'src/backoff/binary_exponential_backoff.dart'
     show BinaryExponentialBackoff;

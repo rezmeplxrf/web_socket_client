@@ -128,7 +128,6 @@ class WebSocket {
       switch (connectionState) {
         case Reconnecting():
           _connectionController.add(const Reconnected());
-          _backoff.reset();
         case Connecting():
           _connectionController.add(const Connected());
         default:

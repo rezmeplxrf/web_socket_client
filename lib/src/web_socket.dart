@@ -187,10 +187,12 @@ class WebSocket {
     if (_isConnected) _connectionController.add(const Disconnecting());
 
     await _channel?.sink.close(code, reason);
-    _connectionController.add(Disconnected(code: code, reason: reason));
     await _subscription?.cancel();
     _subscription = null;
     _channel = null;
-    _connectionController.close();
+
+    _connectionController
+      ..add(Disconnected(code: code, reason: reason))
+      ..close();
   }
 }

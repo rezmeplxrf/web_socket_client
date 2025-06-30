@@ -23,6 +23,11 @@ class Connecting extends ConnectionState {
   bool operator ==(Object other) {
     return identical(this, other) || other is Connecting;
   }
+
+  @override
+  String toString() {
+    return 'Connecting';
+  }
 }
 
 /// {@template connected}

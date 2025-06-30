@@ -119,7 +119,7 @@ class WebSocket {
         onDone: attemptToReconnect,
         cancelOnError: true,
       );
-    } catch (error, stackTrace) {
+    } on Exception catch (error, stackTrace) {
       attemptToReconnect(error, stackTrace);
     }
   }
@@ -186,5 +186,45 @@ class WebSocket {
       _subscription?.cancel();
       _connectionController.close();
     });
+  }
+
+  /// Convienience method to check if the connection is ready.
+  Future<void> ready({Duration timeout = const Duration(seconds: 15)}) async {
+    if (_channel == null) {
+      await _waitForChannel(timeout: timeout);
+    }
+    await _channel!.ready.timeout(timeout, onTimeout: () {
+      throw TimeoutException(
+          'WebSocket connection did not become ready in time.');
+    });
+  }
+
+  Future<void> _waitForChannel(
+      {Duration timeout = const Duration(seconds: 10)}) {
+    if (_channel != null) return Future.value();
+
+    final completer = Completer<void>();
+    final timeoutTimer = Timer(timeout, () {
+      if (!completer.isCompleted) {
+        completer.completeError(
+          TimeoutException('WebSocket channel did not become ready in time.'),
+        );
+      }
+    });
+
+    // Listen for changes in the connection state
+    final subscription = _connectionController.listen((state) {
+      if (state is Connected || state is Reconnected) {
+        if (!completer.isCompleted) {
+          timeoutTimer.cancel();
+          completer.complete();
+        }
+      }
+    });
+
+    // Ensure the subscription is canceled when the completer completes
+    completer.future.whenComplete(subscription.cancel);
+
+    return completer.future;
   }
 }

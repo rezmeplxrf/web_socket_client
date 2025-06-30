@@ -71,6 +71,13 @@ class WebSocket {
   bool _isClosedByClient = false;
 
   void attemptToReconnect([Object? error, StackTrace? stackTrace]) {
+    if (_isClosedByClient) return;
+    switch (_connectionController.state) {
+      case Disconnecting():
+      case Reconnecting():
+        return;
+      default:
+    }
     _connectionController.add(
       Disconnected(
         code: _channel?.closeCode,
@@ -79,15 +86,6 @@ class WebSocket {
         stackTrace: stackTrace,
       ),
     );
-    if (_isClosedByClient) {
-      return;
-    }
-    switch (_connectionController.state) {
-      case Disconnecting():
-      case Reconnecting():
-        return;
-      default:
-    }
 
     if (_backoffDuration >= _timeout) return _closeWithTimeout();
 
@@ -96,6 +94,7 @@ class WebSocket {
       close();
       return;
     }
+
     _reconnect();
   }
 
@@ -107,6 +106,7 @@ class WebSocket {
       return;
     }
     try {
+      _channel = null;
       final ws = await connect(
         _uri.toString(),
         protocols: _protocols,
@@ -148,11 +148,18 @@ class WebSocket {
   Future<void> _reconnect() async {
     if (_backoffDuration >= _timeout) return _closeWithTimeout();
     if (_isClosedByClient || _isConnected) return;
+
     if (_backoff is NoBackoff) return;
 
     _connectionController.add(const Reconnecting());
 
     await init();
+    if (_isClosedByClient || _isConnected) {
+      _backoff.reset();
+      _backoffTimer?.cancel();
+      _backoffDuration = Duration.zero;
+      return;
+    }
     _backoffTimer?.cancel();
     final next = _backoff.next();
     _backoffDuration = _backoffDuration + next;
@@ -183,12 +190,10 @@ class WebSocket {
     _backoffTimer?.cancel();
     _backoffDuration = Duration.zero;
     if (_isConnected) _connectionController.add(const Disconnecting());
-
     await _channel?.sink.close(code, reason);
     await _subscription?.cancel();
     _subscription = null;
     _channel = null;
-
     _connectionController
       ..add(Disconnected(code: code, reason: reason))
       ..close();

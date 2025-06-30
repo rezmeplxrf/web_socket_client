@@ -22,7 +22,7 @@ void main() {
 
     group('protocol', () {
       test('is empty when client is disconnected', () {
-        final socket = WebSocket(uri);
+        final socket = WebSocket(uri, onMessage: (message) {});
         expect(socket.protocol, isEmpty);
       });
 
@@ -31,6 +31,7 @@ void main() {
         final socket = WebSocket(
           Uri.parse('ws://localhost:${server!.port}'),
           backoff: const ConstantBackoff(Duration.zero),
+          onMessage: (message) {},
         );
 
         await expectLater(
@@ -53,6 +54,7 @@ void main() {
           Uri.parse('ws://localhost:${server!.port}'),
           protocols: [protocol],
           backoff: const ConstantBackoff(Duration.zero),
+          onMessage: (message) {},
         );
 
         await expectLater(
@@ -73,7 +75,7 @@ void main() {
       test(
           'emits [connecting, disconnected, reconnecting] '
           'when not able to establish a connection.', () async {
-        final socket = WebSocket(uri);
+        final socket = WebSocket(uri, onMessage: (message) {});
 
         await expectLater(
           socket.connection,
@@ -95,7 +97,8 @@ void main() {
           'emits [connecting, disconnected, reconnecting] '
           'when not able to establish a connection with retry.', () async {
         final backoff = _MockBackoff();
-        final socket = WebSocket(uri, backoff: backoff);
+        final socket =
+            WebSocket(uri, backoff: backoff, onMessage: (message) {});
 
         when(backoff.next).thenReturn(Duration.zero);
 
@@ -121,7 +124,8 @@ void main() {
           'emits [connecting, disconnected] '
           'when not able to establish a connection due to timeout.', () async {
         final backoff = _MockBackoff();
-        final socket = WebSocket(uri, backoff: backoff, timeout: Duration.zero);
+        final socket = WebSocket(uri,
+            backoff: backoff, timeout: Duration.zero, onMessage: (message) {});
 
         when(backoff.next).thenReturn(Duration.zero);
 
@@ -149,6 +153,7 @@ void main() {
           uri,
           backoff: backoff,
           timeout: const Duration(milliseconds: 50),
+          onMessage: (message) {},
         );
 
         when(backoff.next).thenReturn(const Duration(milliseconds: 50));
@@ -177,6 +182,7 @@ void main() {
         final socket = WebSocket(
           Uri.parse('ws://localhost:${server!.port}'),
           backoff: const ConstantBackoff(Duration.zero),
+          onMessage: (message) {},
         );
 
         await expectLater(
@@ -197,6 +203,7 @@ void main() {
         final socket = WebSocket(
           Uri.parse('ws://localhost:$port'),
           backoff: const ConstantBackoff(Duration.zero),
+          onMessage: (message) {},
         );
 
         await expectLater(
@@ -234,6 +241,7 @@ void main() {
         final socket = WebSocket(
           Uri.parse('ws://localhost:$port'),
           backoff: const ConstantBackoff(Duration.zero),
+          onMessage: (message) {},
         )..connection.listen(connectionStates.add);
 
         await expectLater(
@@ -289,6 +297,7 @@ void main() {
         final socket = WebSocket(
           Uri.parse('ws://localhost:${server!.port}'),
           backoff: const ConstantBackoff(Duration.zero),
+          onMessage: (message) {},
         )..connection.listen(connectionStates.add);
 
         await expectLater(
@@ -327,7 +336,8 @@ void main() {
         final socket = WebSocket(
           uri,
           backoff: const ConstantBackoff(Duration.zero),
-        )..messages.listen(messages.add);
+          onMessage: messages.add,
+        );
 
         await _sleep();
 
@@ -351,7 +361,8 @@ void main() {
         final socket = WebSocket(
           Uri.parse('ws://localhost:${server!.port}'),
           backoff: const ConstantBackoff(Duration.zero),
-        )..messages.listen(messages.add);
+          onMessage: messages.add,
+        );
 
         await expectLater(
           socket.connection,
@@ -384,7 +395,8 @@ void main() {
         socket = WebSocket(
           Uri.parse('ws://localhost:${server!.port}'),
           backoff: const ConstantBackoff(Duration.zero),
-        )..messages.listen(messages.add);
+          onMessage: messages.add,
+        );
 
         await expectLater(
           socket.connection,
@@ -400,8 +412,9 @@ void main() {
         final socket = WebSocket(
           uri,
           backoff: const ConstantBackoff(Duration.zero),
+          onMessage: (message) {},
         );
-        expect(() => socket.send(null), returnsNormally);
+        expect(() => socket.send('Test'), returnsNormally);
 
         socket.close();
       });
@@ -417,6 +430,7 @@ void main() {
         final socket = WebSocket(
           Uri.parse('ws://localhost:${server!.port}'),
           backoff: const ConstantBackoff(Duration.zero),
+          onMessage: (message) {},
         );
 
         await expectLater(
@@ -441,7 +455,7 @@ void main() {
 
     group('close', () {
       test('does nothing when connection is closed', () async {
-        final socket = WebSocket(uri);
+        final socket = WebSocket(uri, onMessage: (message) {});
 
         await expectLater(
           socket.connection,
@@ -465,7 +479,7 @@ void main() {
       });
 
       test('does nothing when called in rapid succession', () async {
-        final socket = WebSocket(uri);
+        final socket = WebSocket(uri, onMessage: (message) {});
 
         await expectLater(
           socket.connection,

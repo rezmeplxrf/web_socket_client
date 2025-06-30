@@ -39,6 +39,9 @@ class Connected extends ConnectionState {
   bool operator ==(Object other) {
     return identical(this, other) || other is Connected;
   }
+
+  @override
+  String toString() => 'Connected';
 }
 
 /// {@template reconnecting}
@@ -56,6 +59,9 @@ class Reconnecting extends ConnectionState {
   bool operator ==(Object other) {
     return identical(this, other) || other is Reconnecting;
   }
+
+  @override
+  String toString() => 'Reconnecting';
 }
 
 /// {@template reconnected}
@@ -72,6 +78,9 @@ class Reconnected extends ConnectionState {
   bool operator ==(Object other) {
     return identical(this, other) || other is Reconnected;
   }
+
+  @override
+  String toString() => 'Reconnected';
 }
 
 /// {@template disconnecting}
@@ -89,6 +98,9 @@ class Disconnecting extends ConnectionState {
   bool operator ==(Object other) {
     return identical(this, other) || other is Disconnecting;
   }
+
+  @override
+  String toString() => 'Disconnecting';
 }
 
 /// {@template disconnected}
@@ -121,5 +133,10 @@ class Disconnected extends ConnectionState {
             reason == other.reason &&
             other.error == error &&
             other.stackTrace == stackTrace;
+  }
+
+  @override
+  String toString() {
+    return 'Disconnected(code: $code, reason: $reason, error: $error, stackTrace: $stackTrace)';
   }
 }

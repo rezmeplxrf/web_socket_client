@@ -15,3 +15,12 @@ abstract class Backoff {
   /// Reset the backoff to its initial state.
   void reset();
 }
+
+/// A backoff strategy that never retries.
+class NoBackoff implements Backoff {
+  @override
+  Duration next() => Duration.zero;
+
+  @override
+  void reset() {}
+}

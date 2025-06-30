@@ -16,7 +16,7 @@ class ConnectionController extends Connection {
   /// {@macro connection_controller}
   ConnectionController()
       : _state = const Connecting(),
-        _controller = StreamController<ConnectionState>.broadcast();
+        _controller = StreamController<ConnectionState>();
 
   ConnectionState _state;
   final StreamController<ConnectionState> _controller;

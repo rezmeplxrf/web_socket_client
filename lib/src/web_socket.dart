@@ -7,6 +7,7 @@ import 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel.da
 import 'package:web_socket_client/src/_web_socket_connect/_web_socket_connect.dart'
     if (dart.library.io) 'package:web_socket_client/src/_web_socket_connect/_web_socket_connect_io.dart'
     if (dart.library.js_interop) 'package:web_socket_client/src/_web_socket_connect/_web_socket_connect_html.dart';
+import 'package:web_socket_client/src/backoff/backoff.dart';
 import 'package:web_socket_client/src/connection.dart';
 import 'package:web_socket_client/web_socket_client.dart';
 
@@ -24,15 +25,16 @@ const _defaultTimeout = Duration(seconds: 60);
 /// {@endtemplate}
 class WebSocket {
   /// {@macro web_socket}
-  WebSocket(
-    Uri uri, {
-    Iterable<String>? protocols,
-    Duration? pingInterval,
-    Map<String, dynamic>? headers,
-    Backoff? backoff,
-    Duration? timeout,
-    String? binaryType,
-  })  : _uri = uri,
+  WebSocket(Uri uri,
+      {required void Function(dynamic message) onMessage,
+      Iterable<String>? protocols,
+      Duration? pingInterval,
+      Map<String, dynamic>? headers,
+      Backoff? backoff,
+      Duration? timeout,
+      String? binaryType})
+      : _uri = uri,
+        _onMessage = onMessage,
         _protocols = protocols,
         _pingInterval = pingInterval,
         _headers = headers,
@@ -41,7 +43,7 @@ class WebSocket {
         _binaryType = binaryType {
     _connect();
   }
-
+  final void Function(dynamic message) _onMessage;
   final Uri _uri;
   final Iterable<String>? _protocols;
   final Map<String, dynamic>? _headers;
@@ -50,7 +52,6 @@ class WebSocket {
   final Duration _timeout;
   final String? _binaryType;
 
-  final _messageController = StreamController<dynamic>.broadcast();
   final _connectionController = ConnectionController();
   StreamSubscription<dynamic>? _subscription;
 
@@ -76,23 +77,25 @@ class WebSocket {
 
   bool _isClosedByClient = false;
 
+  void attemptToReconnect([Object? error, StackTrace? stackTrace]) {
+    if (_isClosedByClient || _isReconnecting || _isDisconnecting) return;
+    if (_backoffDuration >= _timeout) return _closeWithTimeout();
+    _connectionController.add(
+      Disconnected(
+        code: _channel?.closeCode,
+        reason: _channel?.closeReason,
+        error: error,
+        stackTrace: stackTrace,
+      ),
+    );
+    _channel = null;
+    // If NoBackoff is used, do not attempt to reconnect.
+    if (_backoff is NoBackoff) return;
+    _reconnect();
+  }
+
   Future<void> _connect() async {
     if (_isConnected) return;
-
-    void attemptToReconnect([Object? error, StackTrace? stackTrace]) {
-      if (_isClosedByClient || _isReconnecting || _isDisconnecting) return;
-      if (_backoffDuration >= _timeout) return _closeWithTimeout();
-      _connectionController.add(
-        Disconnected(
-          code: _channel?.closeCode,
-          reason: _channel?.closeReason,
-          error: error,
-          stackTrace: stackTrace,
-        ),
-      );
-      _channel = null;
-      _reconnect();
-    }
 
     try {
       final ws = await connect(
@@ -102,32 +105,39 @@ class WebSocket {
         pingInterval: _pingInterval,
         binaryType: _binaryType,
       ).timeout(_timeout);
-
-      final connectionState = _connectionController.state;
-      if (connectionState is Reconnecting) {
-        _connectionController.add(const Reconnected());
-      } else if (connectionState is Connecting) {
-        _connectionController.add(const Connected());
+      switch (_connectionController.state) {
+        case Connected():
+        case Reconnected():
+          _connectionController.add(_connectionController.state);
+        default:
       }
 
       _channel = getWebSocketChannel(ws);
       _subscription?.cancel().ignore();
       _subscription = _channel!.stream.listen(
-        (message) {
-          if (_messageController.isClosed) return;
-          _messageController.add(message);
-        },
+        _onMessage,
         onDone: attemptToReconnect,
         cancelOnError: true,
       );
-    } on Exception catch (error, stackTrace) {
+    } catch (error, stackTrace) {
       attemptToReconnect(error, stackTrace);
     }
+  }
+
+  void subscribe(void Function(dynamic message) onMessage) {
+    _subscription = _channel!.stream.listen(
+      onMessage,
+      onDone: attemptToReconnect,
+      cancelOnError: true,
+    );
   }
 
   Future<void> _reconnect() async {
     if (_backoffDuration >= _timeout) return _closeWithTimeout();
     if (_isClosedByClient || _isConnected) return;
+
+    // If NoBackoff is used, do not attempt to reconnect.
+    if (_backoff is NoBackoff) return;
 
     _connectionController.add(const Reconnecting());
 
@@ -148,9 +158,6 @@ class WebSocket {
 
   void _closeWithTimeout() => close(1006, 'connection timeout');
 
-  /// The stream of messages received from the WebSocket server.
-  Stream<dynamic> get messages => _messageController.stream;
-
   /// The WebSocket [Connection].
   Connection get connection => _connectionController;
 
@@ -163,7 +170,7 @@ class WebSocket {
 
   /// Enqueues the specified data to be transmitted
   /// to the server over the WebSocket connection.
-  void send(dynamic message) => _channel?.sink.add(message);
+  void send(String message) => _channel?.sink.add(message);
 
   /// Closes the connection and frees any resources.
   void close([int? code, String? reason]) {
@@ -177,7 +184,6 @@ class WebSocket {
     ]).whenComplete(() {
       _connectionController.add(Disconnected(code: code, reason: reason));
       _subscription?.cancel();
-      _messageController.close();
       _connectionController.close();
     });
   }

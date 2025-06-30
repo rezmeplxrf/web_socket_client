@@ -92,10 +92,6 @@ class WebSocket {
     // If NoBackoff is used, do not attempt to reconnect.
     if (_backoff is NoBackoff) {
       close();
-      _subscription?.cancel();
-      _connectionController.close();
-      _isClosedByClient = true;
-      _backoffTimer?.cancel();
       return;
     }
     _reconnect();

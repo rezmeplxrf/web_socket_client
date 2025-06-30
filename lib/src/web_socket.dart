@@ -87,24 +87,20 @@ class WebSocket {
       ),
     );
 
-    if (_backoffDuration >= _timeout) return _closeWithTimeout();
-
     // If NoBackoff is used, do not attempt to reconnect.
     if (_backoff is NoBackoff) {
       close();
       return;
     }
-
+    _channel = null;
     _reconnect();
   }
 
   Future<void> init() async {
     if (_isClosedByClient || _isConnected) {
-      _backoffTimer?.cancel();
       return;
     }
     try {
-      _channel = null;
       final ws = await connect(
         _uri.toString(),
         protocols: _protocols,
@@ -151,6 +147,12 @@ class WebSocket {
     _connectionController.add(const Reconnecting());
 
     await init();
+    if (_isClosedByClient || _isConnected) {
+      _backoff.reset();
+      _backoffTimer?.cancel();
+      _backoffDuration = Duration.zero;
+      return;
+    }
 
     _backoffTimer?.cancel();
     final next = _backoff.next();

@@ -69,16 +69,6 @@ class WebSocket {
   bool _isClosedByClient = false;
 
   void attemptToReconnect([Object? error, StackTrace? stackTrace]) {
-    if (_isClosedByClient) {
-      return;
-    }
-
-    switch (_connectionController.state) {
-      case Disconnecting():
-      case Reconnecting():
-        return;
-      default:
-    }
     _connectionController.add(
       Disconnected(
         code: _channel?.closeCode,
@@ -87,6 +77,15 @@ class WebSocket {
         stackTrace: stackTrace,
       ),
     );
+    if (_isClosedByClient) {
+      return;
+    }
+    switch (_connectionController.state) {
+      case Disconnecting():
+      case Reconnecting():
+        return;
+      default:
+    }
 
     if (_backoffDuration >= _timeout) return _closeWithTimeout();
 

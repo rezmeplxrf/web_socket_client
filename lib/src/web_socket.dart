@@ -147,7 +147,7 @@ class WebSocket {
     _connectionController.add(const Reconnecting());
 
     await init();
-    if (_isClosedByClient || _isConnected) {
+    if (_isClosedByClient) {
       _backoff.reset();
       _backoffTimer?.cancel();
       _backoffDuration = Duration.zero;
@@ -189,9 +189,9 @@ class WebSocket {
     await _subscription?.cancel();
     _subscription = null;
     _channel = null;
-
-    _connectionController
-      ..add(Disconnected(code: code, reason: reason))
-      ..close();
+    if (_connectionController.state is! Disconnected) {
+      _connectionController.add(Disconnected(code: code, reason: reason));
+    }
+    _connectionController.close();
   }
 }

@@ -17,7 +17,7 @@ class Connecting extends ConnectionState {
   const Connecting();
 
   @override
-  int get hashCode => 0;
+  int get hashCode => runtimeType.hashCode;
 
   @override
   bool operator ==(Object other) {
@@ -38,7 +38,7 @@ class Connected extends ConnectionState {
   const Connected();
 
   @override
-  int get hashCode => 1;
+  int get hashCode => runtimeType.hashCode;
 
   @override
   bool operator ==(Object other) {
@@ -46,7 +46,9 @@ class Connected extends ConnectionState {
   }
 
   @override
-  String toString() => 'Connected';
+  String toString() {
+    return 'Connected';
+  }
 }
 
 /// {@template reconnecting}
@@ -58,7 +60,7 @@ class Reconnecting extends ConnectionState {
   const Reconnecting();
 
   @override
-  int get hashCode => 2;
+  int get hashCode => runtimeType.hashCode;
 
   @override
   bool operator ==(Object other) {
@@ -66,7 +68,9 @@ class Reconnecting extends ConnectionState {
   }
 
   @override
-  String toString() => 'Reconnecting';
+  String toString() {
+    return 'Reconnecting';
+  }
 }
 
 /// {@template reconnected}
@@ -77,7 +81,7 @@ class Reconnected extends ConnectionState {
   const Reconnected();
 
   @override
-  int get hashCode => 3;
+  int get hashCode => runtimeType.hashCode;
 
   @override
   bool operator ==(Object other) {
@@ -85,7 +89,9 @@ class Reconnected extends ConnectionState {
   }
 
   @override
-  String toString() => 'Reconnected';
+  String toString() {
+    return 'Reconnected';
+  }
 }
 
 /// {@template disconnecting}
@@ -97,7 +103,7 @@ class Disconnecting extends ConnectionState {
   const Disconnecting();
 
   @override
-  int get hashCode => 4;
+  int get hashCode => runtimeType.hashCode;
 
   @override
   bool operator ==(Object other) {
@@ -105,7 +111,9 @@ class Disconnecting extends ConnectionState {
   }
 
   @override
-  String toString() => 'Disconnecting';
+  String toString() {
+    return 'Disconnecting';
+  }
 }
 
 /// {@template disconnected}
@@ -128,7 +136,8 @@ class Disconnected extends ConnectionState {
   final String? reason;
 
   @override
-  int get hashCode => Object.hashAll([code, reason]);
+  int get hashCode =>
+      Object.hashAll([runtimeType, code, reason, error, stackTrace]);
 
   @override
   bool operator ==(Object other) {

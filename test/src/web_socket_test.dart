@@ -514,12 +514,15 @@ Future<io.HttpServer> createWebSocketServer({
   server
       .transform(
     io.WebSocketTransformer(
-      protocolSelector: (protocols) => protocols.firstOrNull,
+      protocolSelector: (protocols) =>
+          (protocols.isNotEmpty ? protocols.first : null),
     ),
   )
       .listen((webSocket) {
     if (onConnection != null) onConnection(IOWebSocketChannel(webSocket));
   });
+  // Ensure the server is ready before returning
+  await Future<void>.delayed(const Duration(milliseconds: 10));
   return server;
 }
 

@@ -42,7 +42,10 @@ class BinaryExponentialBackoff implements Backoff {
   @override
   Duration next() {
     final backoff = _current;
-    if (maximumStep > _currentStep++) _current = _current * 2;
+    if (_currentStep < maximumStep) {
+      _currentStep++;
+      _current = _current * 2;
+    }
     return backoff;
   }
 

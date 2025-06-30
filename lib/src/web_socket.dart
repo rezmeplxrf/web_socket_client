@@ -125,6 +125,7 @@ class WebSocket {
         cancelOnError: true,
       );
       unawaited(_channel!.ready.whenComplete(() {
+        print('WebSocket connection established: $_uri');
         final connectionState = _connectionController.state;
         switch (connectionState) {
           case Reconnecting():

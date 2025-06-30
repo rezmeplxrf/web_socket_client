@@ -191,7 +191,6 @@ class WebSocket {
     await _subscription?.cancel();
     _subscription = null;
     _channel = null;
-    await Future<void>.delayed(const Duration(milliseconds: 100));
     _connectionController.close();
   }
 }

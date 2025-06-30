@@ -124,14 +124,6 @@ class WebSocket {
     }
   }
 
-  void subscribe(void Function(dynamic message) onMessage) {
-    _subscription = _channel!.stream.listen(
-      onMessage,
-      onDone: attemptToReconnect,
-      cancelOnError: true,
-    );
-  }
-
   Future<void> _reconnect() async {
     if (_backoffDuration >= _timeout) return _closeWithTimeout();
     if (_isClosedByClient || _isConnected) return;

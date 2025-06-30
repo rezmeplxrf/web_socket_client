@@ -24,7 +24,7 @@ const _defaultTimeout = Duration(seconds: 60);
 class WebSocket {
   /// {@macro web_socket}
   WebSocket(Uri uri,
-      {required void Function(dynamic message) onMessage,
+      {required void Function(String message) onMessage,
       Iterable<String>? protocols,
       Duration? pingInterval,
       Map<String, dynamic>? headers,
@@ -39,7 +39,7 @@ class WebSocket {
         _backoff = backoff ?? _defaultBackoff,
         _timeout = timeout ?? _defaultTimeout,
         _binaryType = binaryType;
-  final void Function(dynamic message) _onMessage;
+  final void Function(String message) _onMessage;
   final Uri _uri;
   final Iterable<String>? _protocols;
   final Map<String, dynamic>? _headers;
@@ -57,10 +57,13 @@ class WebSocket {
   WebSocketChannel? _channel;
 
   bool get _isConnected {
-    final connectionState = _connectionController.state;
-    return connectionState is Connected ||
-        connectionState is Reconnected ||
-        connectionState is Disconnecting;
+    switch (_connectionController.state) {
+      case Connected():
+      case Reconnected():
+        return true;
+      default:
+        return false;
+    }
   }
 
   bool _isClosedByClient = false;
@@ -116,7 +119,12 @@ class WebSocket {
 
       _subscription?.cancel().ignore();
       _subscription = _channel!.stream.listen(
-        _onMessage,
+        (msg) {
+          if (msg == null || msg is! String) {
+            return;
+          }
+          _onMessage(msg);
+        },
         onDone: attemptToReconnect,
         cancelOnError: true,
       );
@@ -138,8 +146,6 @@ class WebSocket {
   Future<void> _reconnect() async {
     if (_backoffDuration >= _timeout) return _closeWithTimeout();
     if (_isClosedByClient || _isConnected) return;
-
-    // If NoBackoff is used, do not attempt to reconnect.
     if (_backoff is NoBackoff) return;
 
     _connectionController.add(const Reconnecting());

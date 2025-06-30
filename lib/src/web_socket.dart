@@ -72,15 +72,13 @@ class WebSocket {
     if (_isClosedByClient) {
       return;
     }
+
     switch (_connectionController.state) {
       case Disconnecting():
       case Reconnecting():
         return;
       default:
     }
-
-    if (_backoffDuration >= _timeout) return _closeWithTimeout();
-
     _connectionController.add(
       Disconnected(
         code: _channel?.closeCode,
@@ -89,6 +87,9 @@ class WebSocket {
         stackTrace: stackTrace,
       ),
     );
+
+    if (_backoffDuration >= _timeout) return _closeWithTimeout();
+
     _channel = null;
     // If NoBackoff is used, do not attempt to reconnect.
     if (_backoff is NoBackoff) {

@@ -117,7 +117,7 @@ class WebSocket {
         onDone: attemptToReconnect,
         cancelOnError: true,
       );
-      await _channel!.ready.whenComplete(() {
+      _channel!.ready.whenComplete(() {
         final connectionState = _connectionController.state;
         switch (connectionState) {
           case Reconnecting():
@@ -126,7 +126,7 @@ class WebSocket {
             _connectionController.add(const Connected());
           default:
         }
-      });
+      }).ignore();
     } catch (error, stackTrace) {
       attemptToReconnect(error, stackTrace);
     }

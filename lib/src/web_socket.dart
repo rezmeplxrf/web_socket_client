@@ -100,8 +100,12 @@ class WebSocket {
   }
 
   Future<void> init() async {
-    if (_isConnected) return;
-
+    if (_isClosedByClient || _isConnected) {
+      _backoff.reset();
+      _backoffTimer?.cancel();
+      _backoffDuration = Duration.zero;
+      return;
+    }
     try {
       final ws = await connect(
         _uri.toString(),
@@ -128,6 +132,7 @@ class WebSocket {
       print(
           'WebSocket connection established with protocols: ${_channel?.protocol}');
       final connectionState = _connectionController.state;
+
       switch (connectionState) {
         case Reconnecting():
           _connectionController.add(const Reconnected());

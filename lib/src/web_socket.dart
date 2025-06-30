@@ -89,15 +89,13 @@ class WebSocket {
 
     if (_backoffDuration >= _timeout) return _closeWithTimeout();
 
-    _channel = null;
     // If NoBackoff is used, do not attempt to reconnect.
     if (_backoff is NoBackoff) {
+      close();
       _subscription?.cancel();
       _connectionController.close();
       _isClosedByClient = true;
       _backoffTimer?.cancel();
-      _backoffDuration = Duration.zero;
-
       return;
     }
     _reconnect();
@@ -182,18 +180,19 @@ class WebSocket {
   void send(String message) => _channel?.sink.add(message);
 
   /// Closes the connection and frees any resources.
-  void close([int? code, String? reason]) {
+  Future<void> close([int? code, String? reason]) async {
     if (_isClosedByClient) return;
     _isClosedByClient = true;
     _backoffTimer?.cancel();
     _backoffDuration = Duration.zero;
     if (_isConnected) _connectionController.add(const Disconnecting());
-    Future.wait<void>([
-      if (_channel != null) _channel!.sink.close(code, reason),
-    ]).whenComplete(() {
-      _connectionController.add(Disconnected(code: code, reason: reason));
-      _subscription?.cancel();
-      _connectionController.close();
-    });
+
+    await _channel?.sink.close(code, reason);
+    _connectionController.add(Disconnected(code: code, reason: reason));
+    await _subscription?.cancel();
+    _subscription = null;
+    _channel = null;
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    _connectionController.close();
   }
 }

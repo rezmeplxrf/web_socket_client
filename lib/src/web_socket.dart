@@ -101,6 +101,8 @@ class WebSocket {
     if (_isClosedByClient || _isConnected) {
       return;
     }
+
+    final connectionState = _connectionController.state;
     try {
       final ws = await connect(
         _uri.toString(),
@@ -124,7 +126,6 @@ class WebSocket {
         cancelOnError: true,
       );
       await _channel!.ready;
-      final connectionState = _connectionController.state;
 
       switch (connectionState) {
         case Reconnecting():

@@ -147,8 +147,6 @@ class WebSocket {
 
     _connectionController.add(const Reconnecting());
 
-    await init();
-
     if (_isClosedByClient || _isConnected) {
       _backoff.reset();
       _backoffTimer?.cancel();
@@ -156,6 +154,7 @@ class WebSocket {
       return;
     }
 
+    await init();
     _backoffTimer?.cancel();
     final next = _backoff.next();
     _backoffDuration = _backoffDuration + next;

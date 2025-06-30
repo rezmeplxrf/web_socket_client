@@ -72,7 +72,8 @@ class WebSocket {
 
   void attemptToReconnect([Object? error, StackTrace? stackTrace]) {
     if (_isClosedByClient) return;
-    switch (_connectionController.state) {
+    final connectionState = _connectionController.state;
+    switch (connectionState) {
       case Disconnecting():
       case Reconnecting():
         return;
@@ -123,8 +124,6 @@ class WebSocket {
         cancelOnError: true,
       );
       await _channel!.ready;
-      print(
-          'WebSocket connection established with protocols: ${_channel?.protocol}');
       final connectionState = _connectionController.state;
 
       switch (connectionState) {
@@ -179,7 +178,6 @@ class WebSocket {
   /// Closes the connection and frees any resources.
   Future<void> close([int? code, String? reason]) async {
     if (_isClosedByClient) return;
-    print('Closing WebSocket connection: $code, $reason');
     _isClosedByClient = true;
     _backoffTimer?.cancel();
     _backoffDuration = Duration.zero;

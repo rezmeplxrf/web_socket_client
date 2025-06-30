@@ -103,9 +103,6 @@ class WebSocket {
       _backoffTimer?.cancel();
       return;
     }
-    if (_channel == null) {
-      _connectionController.add(const Connecting());
-    }
     try {
       _channel = null;
       final ws = await connect(
@@ -141,8 +138,6 @@ class WebSocket {
           _connectionController.add(const Connected());
         default:
       }
-
-      _backoffTimer?.cancel();
     } catch (error, stackTrace) {
       attemptToReconnect(error, stackTrace);
     }
@@ -151,7 +146,6 @@ class WebSocket {
   Future<void> _reconnect() async {
     if (_backoffDuration >= _timeout) return _closeWithTimeout();
     if (_isClosedByClient || _isConnected) return;
-
     if (_backoff is NoBackoff) return;
 
     _connectionController.add(const Reconnecting());

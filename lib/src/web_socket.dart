@@ -118,7 +118,7 @@ class WebSocket {
       _channel = getWebSocketChannel(ws);
 
       _subscription?.cancel().ignore();
-      _subscription = _channel!.stream.listen(
+      _subscription = _channel!.stream.distinct().listen(
         (msg) {
           if (msg == null || msg is! String) {
             return;

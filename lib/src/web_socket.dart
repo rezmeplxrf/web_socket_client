@@ -1,7 +1,6 @@
 // ignore_for_file: avoid_print
 
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel.dart'
     if (dart.library.io) 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel_io.dart'
@@ -59,24 +58,19 @@ class WebSocket {
 
   WebSocketChannel? _channel;
 
-  Completer<void>? _initCompleter;
-
-  bool get _isConnected =>
-      _connectionController.state is Connected ||
-      _connectionController.state is Reconnected;
-
-  bool get _isConnecting =>
-      _connectionController.state is Connecting ||
-      _connectionController.state is Reconnecting;
+  bool get _isConnected {
+    switch (_connectionController.state) {
+      case Connected():
+      case Reconnected():
+        return true;
+      default:
+        return false;
+    }
+  }
 
   bool _isClosedByClient = false;
 
   void attemptToReconnect([Object? error, StackTrace? stackTrace]) {
-    // Prevent reconnection attempts if already connecting or closed
-    if (_isConnecting || _isClosedByClient) {
-      return;
-    }
-
     _connectionController.add(
       Disconnected(
         code: _channel?.closeCode,
@@ -85,8 +79,9 @@ class WebSocket {
         stackTrace: stackTrace,
       ),
     );
-
-    // Check state after adding disconnected state
+    if (_isClosedByClient) {
+      return;
+    }
     switch (_connectionController.state) {
       case Disconnecting():
       case Reconnecting():
@@ -94,9 +89,7 @@ class WebSocket {
       default:
     }
 
-    if (_backoffDuration >= _timeout) {
-      return _closeWithTimeout();
-    }
+    if (_backoffDuration >= _timeout) return _closeWithTimeout();
 
     // If NoBackoff is used, do not attempt to reconnect.
     if (_backoff is NoBackoff) {
@@ -106,25 +99,8 @@ class WebSocket {
     _reconnect();
   }
 
-  Future<void> init({bool isReconnection = false}) async {
-    final connectionState = _connectionController.state;
-    switch (connectionState) {
-      case Connecting():
-      case Reconnecting():
-        return _initCompleter?.future ?? Future.value();
-      case Connected():
-      case Reconnected():
-        return;
-
-      default:
-    }
-    if (isReconnection) {
-      if (_isClosedByClient) return;
-      _connectionController.add(const Reconnecting());
-    } else {
-      _connectionController.add(const Connecting());
-    }
-    _initCompleter = Completer<void>();
+  Future<void> init() async {
+    if (_isConnected) return;
 
     try {
       final ws = await connect(
@@ -134,12 +110,6 @@ class WebSocket {
         pingInterval: _pingInterval,
         binaryType: _binaryType,
       ).timeout(_timeout);
-
-      // Check if closed during connection attempt
-      if (_isClosedByClient) {
-        await close();
-        return;
-      }
 
       _channel = getWebSocketChannel(ws);
 
@@ -155,22 +125,8 @@ class WebSocket {
         cancelOnError: true,
       );
       await _channel!.ready;
-
-      // Check again if closed during ready wait
-      if (_isClosedByClient) {
-        await _channel?.sink.close();
-        return;
-      }
-
-      developer.log(
-          'WebSocket connection established with protocols: ${_channel?.protocol}',
-          name: 'WebSocket');
-
-      // Reset backoff duration and strategy on successful connection
-      _backoffDuration = Duration.zero;
-      _backoff.reset();
-      _backoffTimer?.cancel();
-
+      print(
+          'WebSocket connection established with protocols: ${_channel?.protocol}');
       final connectionState = _connectionController.state;
       switch (connectionState) {
         case Reconnecting():
@@ -181,39 +137,24 @@ class WebSocket {
       }
     } catch (error, stackTrace) {
       attemptToReconnect(error, stackTrace);
-    } finally {
-      _initCompleter?.complete();
-      _initCompleter = null;
     }
   }
 
   Future<void> _reconnect() async {
-    if (_isConnecting || _isClosedByClient || _isConnected) {
-      return;
-    }
-    if (_backoff is NoBackoff) {
-      return;
-    }
+    if (_backoffDuration >= _timeout) return _closeWithTimeout();
+    if (_isClosedByClient || _isConnected) return;
+    if (_backoff is NoBackoff) return;
 
-    final next = _backoff.next();
-    if (_backoffDuration + next >= _timeout) {
-      return _closeWithTimeout();
-    }
-    // Cancel existing timer before setting new one
+    _connectionController.add(const Reconnecting());
+
+    await init();
     _backoffTimer?.cancel();
+    final next = _backoff.next();
     _backoffDuration = _backoffDuration + next;
-
-    _backoffTimer = Timer(next, () async {
-      if (!_isClosedByClient && !_isConnected) {
-        await init(isReconnection: true);
-      }
-    });
+    _backoffTimer = Timer(next, _reconnect);
   }
 
-  static const int _timeoutCloseCode = 1006;
-  static const String _timeoutCloseReason = 'connection timeout';
-
-  void _closeWithTimeout() => close(_timeoutCloseCode, _timeoutCloseReason);
+  void _closeWithTimeout() => close(1006, 'connection timeout');
 
   /// The WebSocket [Connection].
   Connection get connection => _connectionController;
@@ -231,26 +172,12 @@ class WebSocket {
 
   /// Closes the connection and frees any resources.
   Future<void> close([int? code, String? reason]) async {
-    if (_isClosedByClient) {
-      return;
-    }
-    developer.log('Closing WebSocket connection: $code, $reason',
-        name: 'WebSocket');
+    if (_isClosedByClient) return;
+    print('Closing WebSocket connection: $code, $reason');
     _isClosedByClient = true;
-
-    // Cancel backoff timer and ongoing operations
     _backoffTimer?.cancel();
-    _backoffTimer = null;
     _backoffDuration = Duration.zero;
-
-    // Complete any pending init operations
-    if (_initCompleter != null && !_initCompleter!.isCompleted) {
-      _initCompleter!.complete();
-    }
-
-    if (_isConnected) {
-      _connectionController.add(const Disconnecting());
-    }
+    if (_isConnected) _connectionController.add(const Disconnecting());
 
     await _channel?.sink.close(code, reason);
     await _subscription?.cancel();

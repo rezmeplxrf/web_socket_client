@@ -120,9 +120,6 @@ class WebSocket {
       _subscription?.cancel().ignore();
       _subscription = _channel!.stream.distinct().listen(
         (msg) {
-          if (msg == null) {
-            return;
-          }
           if (msg is String) {
             _onMessage(msg);
           } else {

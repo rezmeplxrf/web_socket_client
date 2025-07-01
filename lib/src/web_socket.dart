@@ -186,7 +186,6 @@ class WebSocket {
     _backoffTimer?.cancel();
     _backoff.reset();
     if (_isConnected) _connectionController.add(const Disconnecting());
-
     await _channel?.sink.close(code, reason);
     await _subscription?.cancel();
     _subscription = null;

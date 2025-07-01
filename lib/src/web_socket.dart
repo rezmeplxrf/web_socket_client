@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_print
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel.dart'
     if (dart.library.io) 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel_io.dart'
@@ -74,6 +75,7 @@ class WebSocket {
     switch (_connectionController.state) {
       case Disconnecting():
       case Reconnecting():
+      case Disconnected():
         return;
       default:
     }
@@ -91,17 +93,21 @@ class WebSocket {
       close();
       return;
     }
-    _channel = null;
     _reconnect();
   }
 
   Future<void> init() async {
-    if (_isClosedByClient || _isConnected) {
+    if (_isConnected) {
+      return;
+    }
+    if (_isClosedByClient) {
+      await close();
       return;
     }
 
     final connectionState = _connectionController.state;
     try {
+      _channel = null;
       final ws = await connect(
         _uri.toString(),
         protocols: _protocols,
@@ -109,16 +115,25 @@ class WebSocket {
         pingInterval: _pingInterval,
         binaryType: _binaryType,
       ).timeout(_timeout);
-
       _channel = getWebSocketChannel(ws);
 
       _subscription?.cancel().ignore();
       _subscription = _channel!.stream.distinct().listen(
         (msg) {
-          if (msg == null || msg is! String) {
+          if (msg == null) {
             return;
           }
-          _onMessage(msg);
+          if (msg is String) {
+            _onMessage(msg);
+          } else {
+            try {
+              _onMessage(utf8.decode(msg as List<int>));
+            } catch (e) {
+              print(
+                'Received invalid data: $msg. Error: $e',
+              );
+            }
+          }
         },
         onDone: attemptToReconnect,
         cancelOnError: true,
@@ -141,17 +156,9 @@ class WebSocket {
     if (_isClosedByClient || _isConnected) return;
     if (_backoff is NoBackoff) return;
     _connectionController.add(const Reconnecting());
-    final backoffDuration = _backoff.next();
     _backoffTimer?.cancel();
-    _backoffTimer = Timer(backoffDuration, () async {
+    _backoffTimer = Timer(_backoff.next(), () async {
       await init();
-      if (_isClosedByClient) {
-        await close();
-        return;
-      }
-      if (!_isConnected) {
-        await _reconnect();
-      }
     });
   }
 
@@ -168,6 +175,9 @@ class WebSocket {
   /// Enqueues the specified data to be transmitted
   /// to the server over the WebSocket connection.
   void send(String message) => _channel?.sink.add(message);
+
+  /// Enqueues binary data to be transmitted to the server.
+  void sendBinary(List<int> data) => _channel?.sink.add(data);
 
   /// Closes the connection and frees any resources.
   Future<void> close([int? code, String? reason]) async {

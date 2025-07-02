@@ -171,7 +171,13 @@ class WebSocket {
 
   /// Enqueues the specified data to be transmitted
   /// to the server over the WebSocket connection.
-  void send(String message) => _channel?.sink.add(message);
+  void send(String message) {
+    if (_channel?.closeCode != null) {
+      _channel?.sink.add(message);
+    } else {
+      print('WebSocket is closed, cannot send message: $message');
+    }
+  }
 
   /// Enqueues binary data to be transmitted to the server.
   void sendBinary(List<int> data) => _channel?.sink.add(data);

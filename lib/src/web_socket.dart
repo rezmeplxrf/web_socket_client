@@ -111,7 +111,9 @@ class WebSocket {
       _subscription?.cancel().ignore();
       _subscription = _channel?.stream.listen(
           (msg) {
-            _onMessage(msg.toString());
+            if (msg is String) {
+              _onMessage(msg);
+            }
           },
           onDone: attemptToReconnect,
           cancelOnError: true,

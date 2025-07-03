@@ -99,7 +99,12 @@ class WebSocket {
 
     final connectionState = _connectionController.state;
     try {
+      if (_channel != null) {
+        await _channel?.sink.close();
+      }
       _channel = null;
+      _subscription?.cancel().ignore();
+
       final ws = await connect(
         _uri.toString(),
         protocols: _protocols,
@@ -108,7 +113,6 @@ class WebSocket {
       ).timeout(_timeout);
       _channel = getWebSocketChannel(ws);
 
-      _subscription?.cancel().ignore();
       _subscription = _channel?.stream.listen(
           (msg) {
             if (msg is String) {

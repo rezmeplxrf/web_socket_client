@@ -1,7 +1,6 @@
 // ignore_for_file: inference_failure_on_instance_creation, unnecessary_lambdas, prefer_const_constructors
 
 import 'dart:async';
-import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:web_socket_client/web_socket_client.dart';
 import 'test_server.dart';
@@ -238,42 +237,6 @@ void main() {
       // Wait to ensure no reconnect occurs
       await Future.delayed(const Duration(milliseconds: 50));
       expect(ws.connection.state, isA<Disconnected>());
-    });
-
-    test('send and receive binary message', () async {
-      final messages = <String>[];
-      final ws = WebSocket(
-        Uri.parse('ws://localhost:8080'),
-        onMessage: (msg) => messages.add(msg),
-      );
-      await ws.init();
-      await ws.connection.firstWhere((state) => state is Connected);
-      const text = 'binary hello';
-      ws.sendBinary(utf8.encode(text));
-      // Wait for echo
-      await Future.delayed(const Duration(milliseconds: 100));
-      expect(messages, contains('echo binary hello'));
-      await ws.close();
-    });
-
-    test('receive invalid UTF-8 binary is ignored', () async {
-      final messages = <String>[];
-      final ws = WebSocket(
-        Uri.parse('ws://localhost:8080'),
-        onMessage: (msg) => messages.add(msg),
-      );
-      await ws.init();
-      await ws.connection.firstWhere((state) => state is Connected);
-      // Send invalid UTF-8 bytes
-      ws.sendBinary([0xff, 0xfe, 0xfd]);
-      // Wait for echo (should not add to messages)
-      await Future.delayed(const Duration(milliseconds: 100));
-      // The server will echo the binary as is, but our client will ignore it
-      // because it cannot decode as UTF-8.
-      // So messages should not contain any new entry for this.
-      expect(
-          messages.where((m) => m.contains('echo')), isNot(contains('echo ')));
-      await ws.close();
     });
   });
 }

@@ -1,14 +1,9 @@
 // ignore_for_file: avoid_print
 
 import 'dart:async';
-import 'dart:convert';
 
-import 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel.dart'
-    if (dart.library.io) 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel_io.dart'
-    if (dart.library.js_interop) 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel_html.dart';
-import 'package:web_socket_client/src/_web_socket_connect/_web_socket_connect.dart'
-    if (dart.library.io) 'package:web_socket_client/src/_web_socket_connect/_web_socket_connect_io.dart'
-    if (dart.library.js_interop) 'package:web_socket_client/src/_web_socket_connect/_web_socket_connect_html.dart';
+import 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel_io.dart';
+import 'package:web_socket_client/src/_web_socket_connect/_web_socket_connect_io.dart';
 import 'package:web_socket_client/src/connection.dart';
 import 'package:web_socket_client/web_socket_client.dart';
 
@@ -32,16 +27,14 @@ class WebSocket {
       Duration? pingInterval,
       Map<String, dynamic>? headers,
       Backoff? backoff,
-      Duration? timeout,
-      String? binaryType})
+      Duration? timeout})
       : _uri = uri,
         _onMessage = onMessage,
         _protocols = protocols,
         _pingInterval = pingInterval,
         _headers = headers,
         _backoff = backoff ?? _defaultBackoff,
-        _timeout = timeout ?? _defaultTimeout,
-        _binaryType = binaryType;
+        _timeout = timeout ?? _defaultTimeout;
   final void Function(String message) _onMessage;
   final Uri _uri;
   final Iterable<String>? _protocols;
@@ -49,7 +42,6 @@ class WebSocket {
   final Duration? _pingInterval;
   final Backoff _backoff;
   final Duration _timeout;
-  final String? _binaryType;
 
   final _connectionController = ConnectionController();
   StreamSubscription<dynamic>? _subscription;
@@ -113,28 +105,20 @@ class WebSocket {
         protocols: _protocols,
         headers: _headers,
         pingInterval: _pingInterval,
-        binaryType: _binaryType,
       ).timeout(_timeout);
       _channel = getWebSocketChannel(ws);
 
       _subscription?.cancel().ignore();
-      _subscription = _channel!.stream.distinct().listen(
-        (msg) {
-          if (msg is String) {
-            _onMessage(msg);
-          } else {
-            try {
-              _onMessage(utf8.decode(msg as List<int>));
-            } catch (e) {
-              print(
-                'Received invalid data: $msg. Error: $e',
-              );
-            }
-          }
-        },
-        onDone: attemptToReconnect,
-        cancelOnError: true,
-      );
+      _subscription = _channel?.stream.listen(
+          (msg) {
+            _onMessage(msg.toString());
+          },
+          onDone: attemptToReconnect,
+          cancelOnError: true,
+          onError: (Object error, StackTrace stacktrace) {
+            print(error);
+            print(stacktrace);
+          });
       await _channel!.ready;
 
       switch (connectionState) {
@@ -172,15 +156,17 @@ class WebSocket {
   /// Enqueues the specified data to be transmitted
   /// to the server over the WebSocket connection.
   void send(String message) {
-    if (_channel?.closeCode != null) {
-      _channel?.sink.add(message);
+    if (_channel?.closeCode == null) {
+      try {
+        _channel?.sink.add(message);
+      } catch (e, st) {
+        print(e);
+        print(st);
+      }
     } else {
       print('WebSocket is closed, cannot send message: $message');
     }
   }
-
-  /// Enqueues binary data to be transmitted to the server.
-  void sendBinary(List<int> data) => _channel?.sink.add(data);
 
   /// Closes the connection and frees any resources.
   Future<void> close([int? code, String? reason]) async {

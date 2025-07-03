@@ -156,7 +156,8 @@ class WebSocket {
   /// Enqueues the specified data to be transmitted
   /// to the server over the WebSocket connection.
   void send(String message) {
-    if (_channel?.closeCode == null) {
+    // Check if the channel and sink are available and not closed
+    if (_channel != null && _channel?.closeCode == null) {
       try {
         _channel?.sink.add(message);
       } catch (e, st) {

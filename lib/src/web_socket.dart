@@ -113,7 +113,7 @@ class WebSocket {
       ).timeout(_timeout);
       _channel = getWebSocketChannel(ws);
 
-      _subscription = _channel?.stream.listen(
+      _subscription = _channel?.stream.distinct().listen(
           (msg) {
             if (msg is String) {
               _onMessage(msg);

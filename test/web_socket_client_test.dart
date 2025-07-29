@@ -242,5 +242,55 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 50));
       expect(ws.connection.state, isA<Disconnected>());
     });
+
+    test('handles SocketException by triggering reconnect', () async {
+      final messages = <String>[];
+      final ws = WebSocket(
+        Uri.parse('ws://localhost:8080'),
+        onMessage: (msg) => messages.add(msg),
+        backoff: ConstantBackoff(const Duration(milliseconds: 10)),
+      );
+      await ws.init();
+      await ws.connection.firstWhere((s) => s is Connected);
+      
+      // Simulate SocketException by calling attemptToReconnect with SocketException
+      final socketException = Exception('SocketException: Reading from a closed socket');
+      ws.attemptToReconnect(socketException);
+      
+      // Wait for reconnecting state
+      await ws.connection.firstWhere((s) => s is Reconnecting);
+      expect(ws.connection.state, isA<Reconnecting>());
+      
+      await ws.close();
+    });
+
+    test('ignores messages when channel is closed', () async {
+      final messages = <String>[];
+      final ws = WebSocket(
+        Uri.parse('ws://localhost:8080'),
+        onMessage: (msg) => messages.add(msg),
+      );
+      await ws.init();
+      await ws.connection.firstWhere((s) => s is Connected);
+      
+      // Send a message to verify connection works
+      ws.send('test');
+      await Future.delayed(const Duration(milliseconds: 100));
+      expect(messages, contains('echo test'));
+      
+      // Close the connection
+      await ws.close();
+      
+      // Verify connection is closed
+      expect(ws.connection.state, isA<Disconnected>());
+      
+      // Try to send message after close - should not crash or add to messages
+      final initialMessageCount = messages.length;
+      ws.send('should be ignored');
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      // Message count should remain the same
+      expect(messages.length, equals(initialMessageCount));
+    });
   });
 }

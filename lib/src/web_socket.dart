@@ -103,7 +103,7 @@ class WebSocket {
         await _channel?.sink.close();
       }
       _channel = null;
-      _subscription?.cancel().ignore();
+      await _subscription?.cancel();
 
       final ws = await connect(
         _uri.toString(),
@@ -126,6 +126,7 @@ class WebSocket {
         onError: (Object error, StackTrace stacktrace) {
           print(error);
           print(stacktrace);
+          attemptToReconnect(error, stacktrace);
         });
     if (_channel == null) {
       attemptToReconnect(Exception('Channel is null while initializing'));
@@ -181,17 +182,21 @@ class WebSocket {
   /// Closes the connection and frees any resources.
   Future<void> close([int? code, String? reason]) async {
     if (_isClosedByClient) return;
-    _isClosedByClient = true;
-    _backoffTimer?.cancel();
-    _backoff.reset();
-    if (_isConnected) _connectionController.add(const Disconnecting());
-    await _channel?.sink.close(code, reason);
-    await _subscription?.cancel();
-    _subscription = null;
-    _channel = null;
-    if (_connectionController.state is! Disconnected) {
-      _connectionController.add(Disconnected(code: code, reason: reason));
+    try {
+      _isClosedByClient = true;
+      _backoffTimer?.cancel();
+      _backoff.reset();
+      if (_isConnected) _connectionController.add(const Disconnecting());
+      await _channel?.sink.close(code, reason);
+      await _subscription?.cancel();
+      _subscription = null;
+      _channel = null;
+      if (_connectionController.state is! Disconnected) {
+        _connectionController.add(Disconnected(code: code, reason: reason));
+      }
+      _connectionController.close();
+    } catch (e) {
+      print('Error closing WebSocket: $e');
     }
-    _connectionController.close();
   }
 }

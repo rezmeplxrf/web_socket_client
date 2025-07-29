@@ -112,30 +112,33 @@ class WebSocket {
         pingInterval: _pingInterval,
       ).timeout(_timeout);
       _channel = getWebSocketChannel(ws);
-
-      _subscription = _channel?.stream.listen(
-          (msg) {
-            if (msg is String) {
-              _onMessage(msg);
-            }
-          },
-          onDone: attemptToReconnect,
-          cancelOnError: true,
-          onError: (Object error, StackTrace stacktrace) {
-            print(error);
-            print(stacktrace);
-          });
-      await _channel!.ready;
-
-      switch (connectionState) {
-        case Reconnecting():
-          _connectionController.add(const Reconnected());
-        case Connecting():
-          _connectionController.add(const Connected());
-        default:
-      }
     } catch (error, stackTrace) {
       attemptToReconnect(error, stackTrace);
+    }
+    _subscription = _channel?.stream.listen(
+        (msg) {
+          if (msg is String) {
+            _onMessage(msg);
+          }
+        },
+        onDone: attemptToReconnect,
+        cancelOnError: true,
+        onError: (Object error, StackTrace stacktrace) {
+          print(error);
+          print(stacktrace);
+        });
+    if (_channel == null) {
+      attemptToReconnect(Exception('Channel is null while initializing'));
+      return;
+    }
+    await _channel?.ready;
+
+    switch (connectionState) {
+      case Reconnecting():
+        _connectionController.add(const Reconnected());
+      case Connecting():
+        _connectionController.add(const Connected());
+      default:
     }
   }
 

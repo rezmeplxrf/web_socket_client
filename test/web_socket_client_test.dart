@@ -6,8 +6,12 @@ import 'package:web_socket_client/web_socket_client.dart';
 import 'test_server.dart';
 
 void main() {
+  final testServer = TestServer();
   setUpAll(() {
-    setupTestServer();
+    testServer.setupTestServer();
+  });
+  tearDownAll(() {
+    testServer.close();
   });
 
   group('WebSocket', () {

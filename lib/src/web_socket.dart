@@ -88,7 +88,7 @@ class WebSocket {
     _reconnect();
   }
 
-  Future<void> init() async {
+  Future<void> init({void Function()? onReady}) async {
     if (_isConnected) {
       return;
     }
@@ -141,6 +141,7 @@ class WebSocket {
         _connectionController.add(const Connected());
       default:
     }
+    onReady?.call();
   }
 
   Future<void> _reconnect() async {

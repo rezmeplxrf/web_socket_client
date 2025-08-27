@@ -18,5 +18,5 @@ void main() async {
   await Future<void>.delayed(const Duration(seconds: 3));
 
   // Close the connection.
-  socket.close();
+  await socket.close();
 }

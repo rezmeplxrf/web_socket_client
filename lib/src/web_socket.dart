@@ -66,7 +66,6 @@ class WebSocket {
     if (_isClosedByClient) return;
     switch (_connectionController.state) {
       case Disconnecting():
-      case Reconnecting():
       case Disconnected():
         return;
       default:

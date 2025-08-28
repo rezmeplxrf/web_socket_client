@@ -113,6 +113,7 @@ class WebSocket {
       _channel = getWebSocketChannel(ws);
     } catch (error, stackTrace) {
       attemptToReconnect(error, stackTrace);
+      return;
     }
     _subscription = _channel?.stream.listen(
         (msg) {

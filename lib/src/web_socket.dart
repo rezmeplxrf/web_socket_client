@@ -75,7 +75,6 @@ class WebSocket {
         code: _channel?.closeCode,
         reason: _channel?.closeReason,
         error: error,
-        stackTrace: stackTrace,
       ),
     );
 
@@ -124,8 +123,6 @@ class WebSocket {
         onDone: attemptToReconnect,
         cancelOnError: true,
         onError: (Object error, StackTrace stacktrace) {
-          print(error);
-          print(stacktrace);
           attemptToReconnect(error, stacktrace);
         });
     if (_channel == null) {

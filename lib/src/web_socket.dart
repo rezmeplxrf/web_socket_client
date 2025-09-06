@@ -21,20 +21,21 @@ const _defaultTimeout = Duration(seconds: 60);
 /// {@endtemplate}
 class WebSocket {
   /// {@macro web_socket}
-  WebSocket(Uri uri,
-      {required void Function(String message) onMessage,
-      Iterable<String>? protocols,
-      Duration? pingInterval,
-      Map<String, dynamic>? headers,
-      Backoff? backoff,
-      Duration? timeout})
-      : _uri = uri,
-        _onMessage = onMessage,
-        _protocols = protocols,
-        _pingInterval = pingInterval,
-        _headers = headers,
-        _backoff = backoff ?? _defaultBackoff,
-        _timeout = timeout ?? _defaultTimeout;
+  WebSocket(
+    Uri uri, {
+    required void Function(String message) onMessage,
+    Iterable<String>? protocols,
+    Duration? pingInterval,
+    Map<String, dynamic>? headers,
+    Backoff? backoff,
+    Duration? timeout,
+  }) : _uri = uri,
+       _onMessage = onMessage,
+       _protocols = protocols,
+       _pingInterval = pingInterval,
+       _headers = headers,
+       _backoff = backoff ?? _defaultBackoff,
+       _timeout = timeout ?? _defaultTimeout;
   final void Function(String message) _onMessage;
   final Uri _uri;
   final Iterable<String>? _protocols;
@@ -95,7 +96,6 @@ class WebSocket {
       return;
     }
 
-    final connectionState = _connectionController.state;
     try {
       if (_channel != null) {
         await _channel?.sink.close();
@@ -115,23 +115,24 @@ class WebSocket {
       return;
     }
     _subscription = _channel?.stream.listen(
-        (msg) {
-          if (msg is String) {
-            _onMessage(msg);
-          }
-        },
-        onDone: attemptToReconnect,
-        cancelOnError: true,
-        onError: (Object error, StackTrace stacktrace) {
-          attemptToReconnect(error, stacktrace);
-        });
+      (msg) {
+        if (msg is String) {
+          _onMessage(msg);
+        }
+      },
+      onDone: attemptToReconnect,
+      cancelOnError: true,
+      onError: (Object error, StackTrace stacktrace) {
+        attemptToReconnect(error, stacktrace);
+      },
+    );
     if (_channel == null) {
       attemptToReconnect(Exception('Channel is null while initializing'));
       return;
     }
     await _channel?.ready;
 
-    switch (connectionState) {
+    switch (_connectionController.state) {
       case Reconnecting():
         _connectionController.add(const Reconnected());
       case Connecting():

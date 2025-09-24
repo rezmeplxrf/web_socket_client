@@ -63,7 +63,10 @@ class WebSocket {
 
   bool _isClosedByClient = false;
 
-  void attemptToReconnect([Object? error, StackTrace? stackTrace]) {
+  Future<void> attemptToReconnect([
+    Object? error,
+    StackTrace? stackTrace,
+  ]) async {
     if (_isClosedByClient) return;
     switch (_connectionController.state) {
       case Disconnecting():
@@ -81,10 +84,10 @@ class WebSocket {
 
     // If NoBackoff is used, do not attempt to reconnect.
     if (_backoff is NoBackoff) {
-      close();
+      await close();
       return;
     }
-    _reconnect();
+    await _reconnect();
   }
 
   Future<void> init({String? onReady}) async {
@@ -111,7 +114,7 @@ class WebSocket {
       ).timeout(_timeout);
       _channel = getWebSocketChannel(ws);
     } catch (error, stackTrace) {
-      attemptToReconnect(error, stackTrace);
+      await attemptToReconnect(error, stackTrace);
       return;
     }
     _subscription = _channel?.stream.listen(
@@ -122,15 +125,17 @@ class WebSocket {
       },
       onDone: attemptToReconnect,
       cancelOnError: true,
-      onError: (Object error, StackTrace stacktrace) {
-        attemptToReconnect(error, stacktrace);
+      onError: (Object error, StackTrace stacktrace) async {
+        await attemptToReconnect(error, stacktrace);
       },
     );
-    if (_channel == null) {
-      attemptToReconnect(Exception('Channel is null while initializing'));
+
+    try {
+      await _channel?.ready;
+    } catch (e) {
+      await attemptToReconnect(Exception('Connection Timeout: $e'));
       return;
     }
-    await _channel?.ready;
 
     switch (_connectionController.state) {
       case Reconnecting():

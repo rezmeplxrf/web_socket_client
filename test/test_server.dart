@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_print
+// ignore_for_file: avoid_print, discarded_futures
 
 import 'dart:convert';
 import 'dart:io';

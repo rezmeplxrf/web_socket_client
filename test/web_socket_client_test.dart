@@ -1,4 +1,4 @@
-// ignore_for_file: inference_failure_on_instance_creation, unnecessary_lambdas, prefer_const_constructors
+// ignore_for_file: inference_failure_on_instance_creation, unnecessary_lambdas, prefer_const_constructors, discarded_futures, unawaited_futures
 
 import 'dart:async';
 import 'package:test/test.dart';
@@ -102,44 +102,50 @@ void main() {
       expect(backoff.next(), const Duration(milliseconds: 100));
     });
 
-    test('BinaryExponentialBackoff with maximumStep 1 returns initial always',
-        () {
-      final backoff = BinaryExponentialBackoff(
-        initial: const Duration(milliseconds: 50),
-        maximumStep: 1,
-      );
-      expect(backoff.next(), const Duration(milliseconds: 50));
-      expect(backoff.next(), const Duration(milliseconds: 50));
-      expect(backoff.next(), const Duration(milliseconds: 50));
-    });
+    test(
+      'BinaryExponentialBackoff with maximumStep 1 returns initial always',
+      () {
+        final backoff = BinaryExponentialBackoff(
+          initial: const Duration(milliseconds: 50),
+          maximumStep: 1,
+        );
+        expect(backoff.next(), const Duration(milliseconds: 50));
+        expect(backoff.next(), const Duration(milliseconds: 50));
+        expect(backoff.next(), const Duration(milliseconds: 50));
+      },
+    );
 
-    test('BinaryExponentialBackoff with maximumStep 0 returns initial always',
-        () {
-      final backoff = BinaryExponentialBackoff(
-        initial: const Duration(milliseconds: 10),
-        maximumStep: 0,
-      );
-      expect(backoff.next(), const Duration(milliseconds: 10));
-      expect(backoff.next(), const Duration(milliseconds: 10));
-    });
+    test(
+      'BinaryExponentialBackoff with maximumStep 0 returns initial always',
+      () {
+        final backoff = BinaryExponentialBackoff(
+          initial: const Duration(milliseconds: 10),
+          maximumStep: 0,
+        );
+        expect(backoff.next(), const Duration(milliseconds: 10));
+        expect(backoff.next(), const Duration(milliseconds: 10));
+      },
+    );
 
-    test('BinaryExponentialBackoff handles zero and negative initial durations',
-        () {
-      final zeroBackoff = BinaryExponentialBackoff(
-        initial: Duration.zero,
-        maximumStep: 3,
-      );
-      expect(zeroBackoff.next(), Duration.zero);
-      expect(zeroBackoff.next(), Duration.zero);
+    test(
+      'BinaryExponentialBackoff handles zero and negative initial durations',
+      () {
+        final zeroBackoff = BinaryExponentialBackoff(
+          initial: Duration.zero,
+          maximumStep: 3,
+        );
+        expect(zeroBackoff.next(), Duration.zero);
+        expect(zeroBackoff.next(), Duration.zero);
 
-      final negativeBackoff = BinaryExponentialBackoff(
-        initial: const Duration(seconds: -1),
-        maximumStep: 2,
-      );
-      expect(negativeBackoff.next(), const Duration(seconds: -1));
-      expect(negativeBackoff.next(), const Duration(seconds: -2));
-      expect(negativeBackoff.next(), const Duration(seconds: -2));
-    });
+        final negativeBackoff = BinaryExponentialBackoff(
+          initial: const Duration(seconds: -1),
+          maximumStep: 2,
+        );
+        expect(negativeBackoff.next(), const Duration(seconds: -1));
+        expect(negativeBackoff.next(), const Duration(seconds: -2));
+        expect(negativeBackoff.next(), const Duration(seconds: -2));
+      },
+    );
 
     test('NoBackoff always returns Duration.zero and does not retry', () {
       final backoff = NoBackoff();
@@ -254,8 +260,9 @@ void main() {
       await ws.connection.firstWhere((s) => s is Connected);
 
       // Simulate SocketException by calling attemptToReconnect with SocketException
-      final socketException =
-          Exception('SocketException: Reading from a closed socket');
+      final socketException = Exception(
+        'SocketException: Reading from a closed socket',
+      );
       ws.attemptToReconnect(socketException);
 
       // Wait for reconnecting state

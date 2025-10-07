@@ -91,9 +91,10 @@ class WebSocket {
   }
 
   Future<void> init({String? onReady}) async {
-    if (_isConnected) {
+    if (_isConnected || _connectionController.state is Connecting) {
       return;
     }
+    _connectionController.add(const Connecting());
     if (_isClosedByClient) {
       await close();
       return;

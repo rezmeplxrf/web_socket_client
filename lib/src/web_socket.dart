@@ -105,7 +105,6 @@ class WebSocket {
       }
       _channel = null;
       await _subscription?.cancel();
-      _connectionController.add(const Connecting());
       final ws = await connect(
         _uri.toString(),
         protocols: _protocols,

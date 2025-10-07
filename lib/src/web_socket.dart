@@ -91,10 +91,9 @@ class WebSocket {
   }
 
   Future<void> init({String? onReady}) async {
-    if (_isConnected || _connectionController.state is Connecting) {
+    if (_isConnected) {
       return;
     }
-    _connectionController.add(const Connecting());
     if (_isClosedByClient) {
       await close();
       return;
@@ -106,7 +105,7 @@ class WebSocket {
       }
       _channel = null;
       await _subscription?.cancel();
-
+      _connectionController.add(const Connecting());
       final ws = await connect(
         _uri.toString(),
         protocols: _protocols,

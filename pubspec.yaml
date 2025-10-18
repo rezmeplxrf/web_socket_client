@@ -1,6 +1,6 @@
 name: web_socket_client
 description: Fork of web_socket_client.
-version: 0.1.6
+version: 0.1.7
 topics: [web-socket, web-socket-client]
 publish_to: none
 

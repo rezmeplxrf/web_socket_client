@@ -63,6 +63,8 @@ class WebSocket {
 
   bool _isClosedByClient = false;
 
+  Future<void>? _initFuture;
+
   Future<void> attemptToReconnect([
     Object? error,
     StackTrace? stackTrace,
@@ -79,6 +81,7 @@ class WebSocket {
         code: _channel?.closeCode,
         reason: _channel?.closeReason,
         error: error,
+        stackTrace: stackTrace,
       ),
     );
 
@@ -90,7 +93,25 @@ class WebSocket {
     await _reconnect();
   }
 
-  Future<void> init({String? onReady}) async {
+  Future<void> init({String? onReady}) {
+    if (_isConnected) return Future.value();
+
+    if (_initFuture != null) {
+      if (onReady != null) {
+        return _initFuture!.whenComplete(() {
+          if (_isConnected) {
+            _channel?.sink.add(onReady);
+          }
+        });
+      }
+      return _initFuture!;
+    }
+
+    _initFuture = _performInit(onReady: onReady);
+    return _initFuture!;
+  }
+
+  Future<void> _performInit({String? onReady}) async {
     if (_isConnected) {
       return;
     }
@@ -100,51 +121,63 @@ class WebSocket {
     }
 
     try {
-      if (_channel != null) {
-        await _channel?.sink.close();
-      }
-      _channel = null;
-      await _subscription?.cancel();
-      final ws = await connect(
-        _uri.toString(),
-        protocols: _protocols,
-        headers: _headers,
-        pingInterval: _pingInterval,
-      ).timeout(_timeout);
-      _channel = getWebSocketChannel(ws);
-    } catch (error, stackTrace) {
-      await attemptToReconnect(error, stackTrace);
-      return;
-    }
-    _subscription = _channel?.stream.listen(
-      (msg) {
-        if (msg is String) {
-          _onMessage(msg);
+      try {
+        if (_channel != null) {
+          await _subscription?.cancel();
+          await _channel?.sink.close();
         }
-      },
-      onDone: attemptToReconnect,
-      cancelOnError: true,
-      onError: (Object error, StackTrace stacktrace) async {
-        await attemptToReconnect(error, stacktrace);
-      },
-    );
+        _channel = null;
+        _subscription = null; 
+        final ws = await connect(
+          _uri.toString(),
+          protocols: _protocols,
+          headers: _headers,
+          pingInterval: _pingInterval,
+        ).timeout(_timeout);
 
-    try {
-      await _channel?.ready;
-    } catch (e) {
-      await attemptToReconnect(Exception('Connection Timeout: $e'));
-      return;
-    }
+        if (_isClosedByClient) {
+          await ws.close();
+          return;
+        }
 
-    switch (_connectionController.state) {
-      case Reconnecting():
-        _connectionController.add(const Reconnected());
-      case Connecting():
-        _connectionController.add(const Connected());
-      default:
-    }
-    if (onReady != null) {
-      _channel?.sink.add(onReady);
+        _channel = getWebSocketChannel(ws);
+      } catch (error, stackTrace) {
+        await attemptToReconnect(error, stackTrace);
+        return;
+      }
+
+      _subscription = _channel?.stream.listen(
+        (msg) {
+          if (msg is String) {
+            _onMessage(msg);
+          }
+        },
+        onDone: attemptToReconnect,
+        cancelOnError: true,
+        onError: (Object error, StackTrace stacktrace) async {
+          await attemptToReconnect(error, stacktrace);
+        },
+      );
+
+      try {
+        await _channel?.ready;
+      } catch (e) {
+        await attemptToReconnect(Exception('Connection Timeout: $e'));
+        return;
+      }
+
+      switch (_connectionController.state) {
+        case Reconnecting():
+          _connectionController.add(const Reconnected());
+        case Connecting():
+          _connectionController.add(const Connected());
+        default:
+      }
+      if (onReady != null) {
+        _channel?.sink.add(onReady);
+      }
+    } finally {
+      _initFuture = null;
     }
   }
 

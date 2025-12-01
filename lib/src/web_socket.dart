@@ -127,7 +127,7 @@ class WebSocket {
           await _channel?.sink.close();
         }
         _channel = null;
-        _subscription = null; 
+        _subscription = null;
         final ws = await connect(
           _uri.toString(),
           protocols: _protocols,
@@ -150,6 +150,10 @@ class WebSocket {
         (msg) {
           if (msg is String) {
             _onMessage(msg);
+          } else {
+            print(
+              'Received Unexpected Message | Type: ${msg.runtimeType} | $msg',
+            );
           }
         },
         onDone: attemptToReconnect,

@@ -207,17 +207,19 @@ class WebSocket {
 
   /// Enqueues the specified data to be transmitted
   /// to the server over the WebSocket connection.
-  void send(String message) {
+  bool send(String message) {
     // Check if the channel and sink are available and not closed
     if (_channel != null && _channel?.closeCode == null) {
       try {
         _channel?.sink.add(message);
-      } catch (e, st) {
-        print(e);
-        print(st);
+        return true;
+      } catch (e) {
+        print('Error sending message: $e');
+        return false;
       }
     } else {
       print('WebSocket is closed, cannot send message: $message');
+      return false;
     }
   }
 

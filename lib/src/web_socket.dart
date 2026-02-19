@@ -10,11 +10,11 @@ import 'package:web_socket_client/web_socket_client.dart';
 /// The default backoff strategy.
 final _defaultBackoff = BinaryExponentialBackoff(
   initial: const Duration(milliseconds: 100),
-  maximumStep: 7,
+  maximumStep: 10,
 );
 
 /// The default connection timeout duration.
-const _defaultTimeout = Duration(seconds: 60);
+const _defaultTimeout = Duration(seconds: 30);
 
 /// {@template web_socket}
 /// A reusable WebSocket client for Dart.

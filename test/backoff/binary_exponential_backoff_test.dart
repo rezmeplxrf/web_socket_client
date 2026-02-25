@@ -60,16 +60,16 @@ void main() {
       final backoff = BinaryExponentialBackoff(
         initial: Duration(milliseconds: 100),
         maximumStep: 7,
-      );
-
-      backoff
+      )
         ..next() // 100ms
         ..next() // 200ms
         ..next() // 400ms
         ..reset();
 
-      expect(backoff.next(), equals(Duration(milliseconds: 100)));
-      expect(backoff.next(), equals(Duration(milliseconds: 200)));
+      final first = backoff.next();
+      final second = backoff.next();
+      expect(first, equals(Duration(milliseconds: 100)));
+      expect(second, equals(Duration(milliseconds: 200)));
     });
 
     test('reset after reaching cap restores full doubling sequence', () {
@@ -90,7 +90,10 @@ void main() {
       expect(backoff.next(), equals(Duration(milliseconds: 50)));
       expect(backoff.next(), equals(Duration(milliseconds: 100)));
       expect(backoff.next(), equals(Duration(milliseconds: 200)));
-      expect(backoff.next(), equals(Duration(milliseconds: 200))); // capped again
+      expect(
+        backoff.next(),
+        equals(Duration(milliseconds: 200)),
+      ); // capped again
     });
 
     test('maximumStep of 1 never doubles', () {

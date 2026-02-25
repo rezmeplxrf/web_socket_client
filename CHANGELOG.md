@@ -1,3 +1,11 @@
+# 0.2.2
+
+- fix: create a fresh default `BinaryExponentialBackoff` per `WebSocket` instance.
+- fix: add async, dynamic-port test server setup to make tests safe under parallel execution.
+- feat: add optional `onError` callback for surfacing internal socket/send/close errors.
+- test: add coverage for `init(onReady)` and disconnected `send`.
+- docs: align README/examples with current API (`onMessage`, `init`, no `messages` stream).
+
 # 0.2.1
 
 - fix: infinite backoff loop by permanently disconnecting and closing the connection if `timeout` duration is exceeded.

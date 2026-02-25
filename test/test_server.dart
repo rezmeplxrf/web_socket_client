@@ -1,5 +1,3 @@
-// ignore_for_file: avoid_print, discarded_futures
-
 import 'dart:convert';
 import 'dart:io';
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -8,7 +6,9 @@ import 'package:shelf_web_socket/shelf_web_socket.dart';
 class TestServer {
   HttpServer? _server;
 
-  void setupTestServer() {
+  Future<void> setupTestServer() async {
+    if (_server != null) return;
+
     final handler = webSocketHandler((webSocket, _) {
       webSocket.stream.listen((message) {
         if (message is String) {
@@ -26,17 +26,25 @@ class TestServer {
       });
     });
 
-    shelf_io.serve(handler, 'localhost', 8080).then((server) {
-      _server = server;
-      print('Serving at ws://${server.address.host}:${server.port}');
-    });
+    _server = await shelf_io.serve(handler, 'localhost', 0);
+  }
+
+  Uri get uri {
+    final server = _server;
+    if (server == null) {
+      throw StateError('Test server has not been started.');
+    }
+    return Uri(
+      scheme: 'ws',
+      host: server.address.host,
+      port: server.port,
+    );
   }
 
   Future<void> close() async {
     if (_server != null) {
       await _server!.close();
       _server = null;
-      print('Test server closed');
     }
   }
 }

@@ -4,15 +4,19 @@ import 'test_server.dart';
 
 void main() {
   final testServer = TestServer();
-  setUpAll(testServer.setupTestServer);
-  tearDownAll(testServer.close);
+  setUpAll(() async {
+    await testServer.setupTestServer();
+  });
+  tearDownAll(() async {
+    await testServer.close();
+  });
 
   group('WebSocket Race Conditions & Error Handling', () {
     late WebSocket ws;
 
     setUp(() {
       ws = WebSocket(
-        Uri.parse('ws://localhost:8080'),
+        testServer.uri,
         onMessage: (_) {},
         backoff: const ConstantBackoff(Duration(milliseconds: 100)),
       );

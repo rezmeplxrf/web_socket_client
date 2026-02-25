@@ -7,13 +7,18 @@ void main() async {
   final uri = Uri.parse('ws://localhost:8080');
   const backoff = ConstantBackoff(Duration(seconds: 1));
   WebSocket? socket;
-  socket = WebSocket(uri, backoff: backoff, onMessage: (message) {
-    print('message: "$message"');
-    socket?.send('ping');
-  });
+  socket = WebSocket(
+    uri,
+    backoff: backoff,
+    onMessage: (message) {
+      print('message: "$message"');
+      socket?.send('ping');
+    },
+  );
 
   // Listen for changes in the connection state.
   socket.connection.listen((state) => print('state: "$state"'));
+  await socket.init(onReady: 'ping');
 
   await Future<void>.delayed(const Duration(seconds: 3));
 

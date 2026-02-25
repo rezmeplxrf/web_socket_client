@@ -1,4 +1,4 @@
-// ignore_for_file: inference_failure_on_instance_creation, unnecessary_lambdas, prefer_const_constructors, discarded_futures, unawaited_futures
+// ignore_for_file: unnecessary_lambdas, prefer_const_constructors, unawaited_futures
 
 import 'dart:async';
 import 'package:test/test.dart';
@@ -7,12 +7,25 @@ import 'test_server.dart';
 
 void main() {
   final testServer = TestServer();
-  setUpAll(() {
-    testServer.setupTestServer();
+  setUpAll(() async {
+    await testServer.setupTestServer();
   });
-  tearDownAll(() {
-    testServer.close();
+  tearDownAll(() async {
+    await testServer.close();
   });
+
+  Future<void> waitFor(
+    bool Function() predicate, {
+    Duration timeout = const Duration(seconds: 2),
+    Duration interval = const Duration(milliseconds: 10),
+  }) async {
+    final end = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(end)) {
+      if (predicate()) return;
+      await Future<void>.delayed(interval);
+    }
+    fail('Condition not met within $timeout.');
+  }
 
   group('WebSocket', () {
     late WebSocket ws;
@@ -21,7 +34,7 @@ void main() {
     setUp(() async {
       messages.clear();
       ws = WebSocket(
-        Uri.parse('ws://localhost:8080'),
+        testServer.uri,
         onMessage: (msg) => messages.add(msg),
       );
       await ws.init();
@@ -35,25 +48,24 @@ void main() {
 
     test('connects and receives echo', () async {
       ws.send('hello');
-      // Wait for echo
-      await Future.delayed(const Duration(milliseconds: 100));
+      await waitFor(() => messages.contains('echo hello'));
       expect(messages, contains('echo hello'));
     });
 
     test('reconnects after server closes connection', () async {
       ws.send('test');
-      await Future.delayed(const Duration(milliseconds: 100));
+      await waitFor(() => messages.contains('echo test'));
       // Simulate server closing connection by closing client channel
       await ws.close();
       // Re-initialize to simulate reconnect
       ws = WebSocket(
-        Uri.parse('ws://localhost:8080'),
+        testServer.uri,
         onMessage: (msg) => messages.add(msg),
       );
       await ws.init();
       await ws.connection.firstWhere((state) => state is Connected);
       ws.send('again');
-      await Future.delayed(const Duration(milliseconds: 100));
+      await waitFor(() => messages.contains('echo again'));
       expect(messages, contains('echo again'));
     });
 
@@ -159,7 +171,7 @@ void main() {
   group('WebSocket edge cases', () {
     test('send after close does not throw', () async {
       final ws = WebSocket(
-        Uri.parse('ws://localhost:8080'),
+        testServer.uri,
         onMessage: (_) {},
       );
       await ws.init();
@@ -169,7 +181,7 @@ void main() {
 
     test('double close does not throw', () async {
       final ws = WebSocket(
-        Uri.parse('ws://localhost:8080'),
+        testServer.uri,
         onMessage: (_) {},
       );
       await ws.init();
@@ -193,7 +205,7 @@ void main() {
 
     test('reconnect does not race with close', () async {
       final ws = WebSocket(
-        Uri.parse('ws://localhost:8080'),
+        testServer.uri,
         onMessage: (_) {},
         backoff: ConstantBackoff(const Duration(milliseconds: 10)),
         timeout: const Duration(milliseconds: 200),
@@ -206,14 +218,14 @@ void main() {
       // Immediately call close
       await ws.close();
       // Wait a bit to allow any pending reconnects to fire
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
       // Should remain closed and not reconnect
       expect(ws.connection.state, isA<Disconnected>());
     });
 
     test('close during reconnect prevents further reconnects', () async {
       final ws = WebSocket(
-        Uri.parse('ws://localhost:8080'),
+        testServer.uri,
         onMessage: (_) {},
         backoff: ConstantBackoff(const Duration(milliseconds: 10)),
         timeout: const Duration(milliseconds: 200),
@@ -227,13 +239,13 @@ void main() {
       // Call close during reconnect
       await ws.close();
       // Wait a bit to ensure no reconnect happens
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(ws.connection.state, isA<Disconnected>());
     });
 
     test('close is idempotent and cancels reconnect timer', () async {
       final ws = WebSocket(
-        Uri.parse('ws://localhost:8080'),
+        testServer.uri,
         onMessage: (_) {},
         backoff: ConstantBackoff(const Duration(milliseconds: 10)),
         timeout: const Duration(milliseconds: 200),
@@ -245,14 +257,14 @@ void main() {
       // Call close again, should not throw
       expect(() => ws.close(), returnsNormally);
       // Wait to ensure no reconnect occurs
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(ws.connection.state, isA<Disconnected>());
     });
 
     test('handles SocketException by triggering reconnect', () async {
       final messages = <String>[];
       final ws = WebSocket(
-        Uri.parse('ws://localhost:8080'),
+        testServer.uri,
         onMessage: (msg) => messages.add(msg),
         backoff: ConstantBackoff(const Duration(milliseconds: 10)),
       );
@@ -275,7 +287,7 @@ void main() {
     test('ignores messages when channel is closed', () async {
       final messages = <String>[];
       final ws = WebSocket(
-        Uri.parse('ws://localhost:8080'),
+        testServer.uri,
         onMessage: (msg) => messages.add(msg),
       );
       await ws.init();
@@ -283,7 +295,7 @@ void main() {
 
       // Send a message to verify connection works
       ws.send('test');
-      await Future.delayed(const Duration(milliseconds: 100));
+      await waitFor(() => messages.contains('echo test'));
       expect(messages, contains('echo test'));
 
       // Close the connection
@@ -295,7 +307,7 @@ void main() {
       // Try to send message after close - should not crash or add to messages
       final initialMessageCount = messages.length;
       ws.send('should be ignored');
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
 
       // Message count should remain the same
       expect(messages.length, equals(initialMessageCount));
@@ -304,7 +316,7 @@ void main() {
     test('safely handles SocketException from closed stream', () async {
       final messages = <String>[];
       final ws = WebSocket(
-        Uri.parse('ws://localhost:8080'),
+        testServer.uri,
         onMessage: (msg) => messages.add(msg),
         backoff: ConstantBackoff(const Duration(milliseconds: 10)),
       );
@@ -313,7 +325,7 @@ void main() {
 
       // Verify initial connection works
       ws.send('test');
-      await Future.delayed(const Duration(milliseconds: 100));
+      await waitFor(() => messages.contains('echo test'));
       expect(messages, contains('echo test'));
 
       // Simulate SocketException from reading a closed stream
@@ -330,10 +342,52 @@ void main() {
 
       // Verify connection still works after handling the exception
       ws.send('after exception');
-      await Future.delayed(const Duration(milliseconds: 100));
+      await waitFor(() => messages.contains('echo after exception'));
       expect(messages, contains('echo after exception'));
 
       await ws.close();
+    });
+
+    test('init with onReady sends startup payload', () async {
+      final messages = <String>[];
+      final ws = WebSocket(
+        testServer.uri,
+        onMessage: messages.add,
+      );
+
+      await ws.init(onReady: 'ready');
+      await ws.connection.firstWhere((s) => s is Connected);
+      await waitFor(() => messages.contains('echo ready'));
+      expect(messages, contains('echo ready'));
+      await ws.close();
+    });
+
+    test(
+      'init with onReady while init is in flight still sends payload',
+      () async {
+        final messages = <String>[];
+        final ws = WebSocket(
+          testServer.uri,
+          onMessage: messages.add,
+        );
+
+        final first = ws.init();
+        final second = ws.init(onReady: 'late-ready');
+
+        await Future.wait([first, second]);
+        await ws.connection.firstWhere((s) => s is Connected);
+        await waitFor(() => messages.contains('echo late-ready'));
+        expect(messages, contains('echo late-ready'));
+        await ws.close();
+      },
+    );
+
+    test('send returns false when not connected', () {
+      final ws = WebSocket(
+        testServer.uri,
+        onMessage: (_) {},
+      );
+      expect(ws.send('not-connected'), isFalse);
     });
   });
 }

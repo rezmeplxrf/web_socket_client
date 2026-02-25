@@ -1,5 +1,3 @@
-// ignore_for_file: avoid_print
-
 import 'dart:async';
 
 import 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel_io.dart';
@@ -7,8 +5,7 @@ import 'package:web_socket_client/src/_web_socket_connect/_web_socket_connect_io
 import 'package:web_socket_client/src/connection.dart';
 import 'package:web_socket_client/web_socket_client.dart';
 
-/// The default backoff strategy.
-final _defaultBackoff = BinaryExponentialBackoff(
+Backoff _defaultBackoff() => BinaryExponentialBackoff(
   initial: const Duration(milliseconds: 100),
   maximumStep: 10,
 );
@@ -24,6 +21,7 @@ class WebSocket {
   WebSocket(
     Uri uri, {
     required void Function(String message) onMessage,
+    void Function(Object error, StackTrace stackTrace)? onError,
     Iterable<String>? protocols,
     Duration? pingInterval,
     Map<String, dynamic>? headers,
@@ -31,12 +29,14 @@ class WebSocket {
     Duration? timeout,
   }) : _uri = uri,
        _onMessage = onMessage,
+       _onError = onError,
        _protocols = protocols,
        _pingInterval = pingInterval,
        _headers = headers,
-       _backoff = backoff ?? _defaultBackoff,
+       _backoff = backoff ?? _defaultBackoff(),
        _timeout = timeout ?? _defaultTimeout;
   final void Function(String message) _onMessage;
+  final void Function(Object error, StackTrace stackTrace)? _onError;
   final Uri _uri;
   final Iterable<String>? _protocols;
   final Map<String, dynamic>? _headers;
@@ -91,6 +91,10 @@ class WebSocket {
       return;
     }
     await _reconnect();
+  }
+
+  void _reportError(Object error, [StackTrace? stackTrace]) {
+    _onError?.call(error, stackTrace ?? StackTrace.empty);
   }
 
   Future<void> init({String? onReady}) {
@@ -150,9 +154,11 @@ class WebSocket {
         (msg) {
           if (msg is String) {
             _onMessage(msg);
-          } else {
-            print(
-              'Received Unexpected Message | Type: ${msg.runtimeType} | $msg',
+          } else if (_onError != null) {
+            _reportError(
+              StateError(
+                'Unexpected message type "${msg.runtimeType}" received from WebSocket stream.',
+              ),
             );
           }
         },
@@ -208,17 +214,18 @@ class WebSocket {
   /// Enqueues the specified data to be transmitted
   /// to the server over the WebSocket connection.
   bool send(String message) {
-    // Check if the channel and sink are available and not closed
     if (_channel != null && _channel?.closeCode == null) {
       try {
         _channel?.sink.add(message);
         return true;
-      } catch (e) {
-        print('Error sending message: $e');
+      } catch (error, stackTrace) {
+        _reportError(error, stackTrace);
         return false;
       }
     } else {
-      print('WebSocket is closed, cannot send message: $message');
+      _reportError(
+        StateError('Cannot send WebSocket message while disconnected.'),
+      );
       return false;
     }
   }
@@ -239,8 +246,8 @@ class WebSocket {
         _connectionController.add(Disconnected(code: code, reason: reason));
       }
       _connectionController.close();
-    } catch (e) {
-      print('Error closing WebSocket: $e');
+    } catch (error, stackTrace) {
+      _reportError(error, stackTrace);
     }
   }
 }

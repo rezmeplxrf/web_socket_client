@@ -86,16 +86,18 @@ void main() {
       expect(backoff.next(), const Duration(seconds: 1));
     });
 
-    test('ConstantBackoff handles zero and negative durations', () {
+    test('ConstantBackoff handles zero durations', () {
       final zeroBackoff = ConstantBackoff(Duration.zero);
       expect(zeroBackoff.next(), Duration.zero);
       zeroBackoff.reset();
       expect(zeroBackoff.next(), Duration.zero);
+    });
 
-      final negativeBackoff = ConstantBackoff(const Duration(seconds: -1));
-      expect(negativeBackoff.next(), const Duration(seconds: -1));
-      negativeBackoff.reset();
-      expect(negativeBackoff.next(), const Duration(seconds: -1));
+    test('ConstantBackoff asserts on negative durations when used', () {
+      expect(
+        () => ConstantBackoff(const Duration(seconds: -1)).next(),
+        throwsA(isA<AssertionError>()),
+      );
     });
 
     test('BinaryExponentialBackoff doubles duration up to maximumStep', () {
@@ -127,37 +129,34 @@ void main() {
       },
     );
 
-    test(
-      'BinaryExponentialBackoff with maximumStep 0 returns initial always',
-      () {
-        final backoff = BinaryExponentialBackoff(
+    test('BinaryExponentialBackoff asserts when maximumStep <= 0', () {
+      expect(
+        () => BinaryExponentialBackoff(
           initial: const Duration(milliseconds: 10),
           maximumStep: 0,
-        );
-        expect(backoff.next(), const Duration(milliseconds: 10));
-        expect(backoff.next(), const Duration(milliseconds: 10));
-      },
-    );
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+    });
 
-    test(
-      'BinaryExponentialBackoff handles zero and negative initial durations',
-      () {
-        final zeroBackoff = BinaryExponentialBackoff(
-          initial: Duration.zero,
-          maximumStep: 3,
-        );
-        expect(zeroBackoff.next(), Duration.zero);
-        expect(zeroBackoff.next(), Duration.zero);
+    test('BinaryExponentialBackoff handles zero initial durations', () {
+      final zeroBackoff = BinaryExponentialBackoff(
+        initial: Duration.zero,
+        maximumStep: 3,
+      );
+      expect(zeroBackoff.next(), Duration.zero);
+      expect(zeroBackoff.next(), Duration.zero);
+    });
 
-        final negativeBackoff = BinaryExponentialBackoff(
+    test('BinaryExponentialBackoff asserts on negative initial durations', () {
+      expect(
+        () => BinaryExponentialBackoff(
           initial: const Duration(seconds: -1),
           maximumStep: 2,
-        );
-        expect(negativeBackoff.next(), const Duration(seconds: -1));
-        expect(negativeBackoff.next(), const Duration(seconds: -2));
-        expect(negativeBackoff.next(), const Duration(seconds: -2));
-      },
-    );
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+    });
 
     test('NoBackoff always returns Duration.zero and does not retry', () {
       final backoff = NoBackoff();
@@ -388,6 +387,36 @@ void main() {
         onMessage: (_) {},
       );
       expect(ws.send('not-connected'), isFalse);
+    });
+
+    test('server initiated close emits close info and reconnects', () async {
+      final messages = <String>[];
+      final ws = WebSocket(
+        testServer.uri,
+        onMessage: messages.add,
+        backoff: ConstantBackoff(const Duration(milliseconds: 10)),
+      );
+      await ws.init();
+      await ws.connection.firstWhere((s) => s is Connected);
+
+      final disconnectedFuture = ws.connection.firstWhere(
+        (s) => s is Disconnected,
+      );
+      final reconnectedFuture = ws.connection.firstWhere(
+        (s) => s is Reconnected,
+      );
+
+      ws.send('__server_close__');
+      final disconnected = await disconnectedFuture as Disconnected;
+      expect(disconnected.code, 4001);
+      expect(disconnected.reason, 'server closed connection');
+
+      await reconnectedFuture.timeout(const Duration(seconds: 2));
+      ws.send('after reconnect');
+      await waitFor(() => messages.contains('echo after reconnect'));
+      expect(messages, contains('echo after reconnect'));
+
+      await ws.close();
     });
   });
 }

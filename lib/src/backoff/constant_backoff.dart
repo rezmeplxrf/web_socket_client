@@ -19,7 +19,10 @@ class ConstantBackoff implements Backoff {
   final Duration duration;
 
   @override
-  Duration next() => duration;
+  Duration next() {
+    assert(duration >= Duration.zero, 'duration must be non-negative');
+    return duration;
+  }
 
   @override
   void reset() {}

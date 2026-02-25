@@ -27,16 +27,17 @@ class _TrackingBackoff implements Backoff {
 }
 
 class _FakeWebSocketSink implements WebSocketSink {
-  _FakeWebSocketSink({this.onClose});
+  _FakeWebSocketSink({this.onClose, this.onAdd});
 
   final Future<void> Function(int? code, String? reason)? onClose;
+  final void Function(Object? data)? onAdd;
   final Completer<void> _done = Completer<void>();
 
   @override
   Future<void> addStream(Stream<Object?> stream) => stream.drain<void>();
 
   @override
-  void add(Object? data) {}
+  void add(Object? data) => onAdd?.call(data);
 
   @override
   void addError(Object error, [StackTrace? stackTrace]) {}
@@ -60,6 +61,7 @@ class _FakeWebSocketChannel implements WebSocketChannel {
     required this.stream,
     required this.sink,
     required this.ready,
+    this.negotiatedProtocol,
   });
 
   @override
@@ -71,8 +73,10 @@ class _FakeWebSocketChannel implements WebSocketChannel {
   @override
   final Future<void> ready;
 
+  final String? negotiatedProtocol;
+
   @override
-  String? get protocol => null;
+  String? get protocol => negotiatedProtocol;
 
   @override
   int? get closeCode => null;
@@ -96,6 +100,124 @@ void main() {
   });
 
   group('WebSocket regressions', () {
+    test('passes protocols headers and pingInterval to connector', () async {
+      final originalConnector = ws_impl.webSocketConnector;
+      final originalBuilder = ws_impl.webSocketChannelBuilder;
+      String? capturedUrl;
+      Iterable<String>? capturedProtocols;
+      Map<String, dynamic>? capturedHeaders;
+      Duration? capturedPingInterval;
+
+      final streamController = StreamController<dynamic>.broadcast();
+      final fakeChannel = _FakeWebSocketChannel(
+        stream: streamController.stream,
+        sink: _FakeWebSocketSink(),
+        ready: Future<void>.value(),
+      );
+
+      ws_impl.webSocketConnector =
+          (
+            url, {
+            protocols,
+            headers,
+            pingInterval,
+          }) async {
+            capturedUrl = url;
+            capturedProtocols = protocols;
+            capturedHeaders = headers;
+            capturedPingInterval = pingInterval;
+            return Object();
+          };
+      ws_impl.webSocketChannelBuilder = (socket) => fakeChannel;
+
+      try {
+        final ws = WebSocket(
+          Uri.parse('ws://example.test/path'),
+          backoff: NoBackoff(),
+          onMessage: (_) {},
+          protocols: const <String>['chat.v2', 'json'],
+          headers: const <String, dynamic>{'Authorization': 'Bearer token'},
+          pingInterval: const Duration(seconds: 7),
+        );
+
+        await ws.init();
+        await Future<void>.delayed(Duration.zero);
+
+        expect(capturedUrl, equals('ws://example.test/path'));
+        expect(capturedProtocols, equals(const <String>['chat.v2', 'json']));
+        expect(
+          capturedHeaders,
+          equals(const <String, dynamic>{'Authorization': 'Bearer token'}),
+        );
+        expect(capturedPingInterval, const Duration(seconds: 7));
+        await ws.close();
+      } finally {
+        await streamController.close();
+        ws_impl.webSocketConnector = originalConnector;
+        ws_impl.webSocketChannelBuilder = originalBuilder;
+      }
+    });
+
+    test(
+      'protocol getter is empty before connect and updates after connect/reconnect',
+      () async {
+        final originalConnector = ws_impl.webSocketConnector;
+        final originalBuilder = ws_impl.webSocketChannelBuilder;
+        var buildCount = 0;
+        final firstStream = StreamController<dynamic>.broadcast();
+        final secondStream = StreamController<dynamic>.broadcast();
+
+        final channels = <_FakeWebSocketChannel>[
+          _FakeWebSocketChannel(
+            stream: firstStream.stream,
+            sink: _FakeWebSocketSink(),
+            ready: Future<void>.value(),
+            negotiatedProtocol: 'chat.v1',
+          ),
+          _FakeWebSocketChannel(
+            stream: secondStream.stream,
+            sink: _FakeWebSocketSink(),
+            ready: Future<void>.value(),
+            negotiatedProtocol: 'chat.v2',
+          ),
+        ];
+
+        ws_impl.webSocketConnector =
+            (
+              url, {
+              protocols,
+              headers,
+              pingInterval,
+            }) async => Object();
+        ws_impl.webSocketChannelBuilder = (socket) => channels[buildCount++];
+
+        try {
+          final ws = WebSocket(
+            Uri.parse('ws://example.test'),
+            backoff: const ConstantBackoff(Duration.zero),
+            onMessage: (_) {},
+          );
+
+          expect(ws.protocol, isEmpty);
+          await ws.init();
+          await ws.connection.firstWhere((state) => state is Connected);
+          expect(ws.protocol, equals('chat.v1'));
+
+          await ws.attemptToReconnect(Exception('force reconnect'));
+          await ws.connection
+              .skip(1)
+              .firstWhere((state) => state is Reconnected);
+          expect(ws.protocol, equals('chat.v2'));
+          await ws.close();
+        } finally {
+          await firstStream.close();
+          await secondStream.close();
+          ws_impl.webSocketConnector = originalConnector;
+          ws_impl.webSocketChannelBuilder = originalBuilder;
+        }
+      },
+    );
+
     test('resets backoff after successful reconnect', () async {
       final backoff = _TrackingBackoff();
       final ws = WebSocket(
@@ -106,15 +228,19 @@ void main() {
       await ws.init();
       await ws.connection.firstWhere((state) => state is Connected);
 
-      final firstReconnected = ws.connection.firstWhere(
-        (state) => state is Reconnected,
-      );
+      final firstReconnected = ws.connection
+          .skip(1)
+          .firstWhere(
+            (state) => state is Reconnected,
+          );
       await ws.attemptToReconnect(Exception('first reconnect'));
       await firstReconnected.timeout(const Duration(milliseconds: 300));
 
-      final secondReconnected = ws.connection.firstWhere(
-        (state) => state is Reconnected,
-      );
+      final secondReconnected = ws.connection
+          .skip(1)
+          .firstWhere(
+            (state) => state is Reconnected,
+          );
       await ws.attemptToReconnect(Exception('second reconnect'));
       await secondReconnected.timeout(const Duration(milliseconds: 300));
 
@@ -256,6 +382,107 @@ void main() {
           await ws.close();
         } finally {
           await streamController.close();
+          ws_impl.webSocketConnector = originalConnector;
+          ws_impl.webSocketChannelBuilder = originalBuilder;
+        }
+      },
+    );
+
+    test(
+      'init(onReady) reports sink add failures and disconnects with NoBackoff',
+      () async {
+        final originalConnector = ws_impl.webSocketConnector;
+        final originalBuilder = ws_impl.webSocketChannelBuilder;
+        final errors = <Object>[];
+
+        final fakeChannel = _FakeWebSocketChannel(
+          stream: const Stream.empty(),
+          sink: _FakeWebSocketSink(
+            onAdd: (_) => throw StateError('onReady add failed'),
+          ),
+          ready: Future<void>.value(),
+        );
+
+        ws_impl.webSocketConnector =
+            (
+              url, {
+              protocols,
+              headers,
+              pingInterval,
+            }) async => Object();
+        ws_impl.webSocketChannelBuilder = (socket) => fakeChannel;
+
+        try {
+          final ws = WebSocket(
+            Uri.parse('ws://example.test'),
+            backoff: NoBackoff(),
+            onMessage: (_) {},
+            onError: (error, _) => errors.add(error),
+          );
+
+          await ws.init(onReady: 'boot');
+          final disconnected = await ws.connection.firstWhere(
+            (state) => state is Disconnected,
+          );
+          expect(disconnected, isA<Disconnected>());
+          expect(
+            errors.whereType<StateError>().map((e) => e.message),
+            contains('onReady add failed'),
+          );
+        } finally {
+          ws_impl.webSocketConnector = originalConnector;
+          ws_impl.webSocketChannelBuilder = originalBuilder;
+        }
+      },
+    );
+
+    test(
+      'in-flight init(onReady) reports sink add failures from whenComplete path',
+      () async {
+        final originalConnector = ws_impl.webSocketConnector;
+        final originalBuilder = ws_impl.webSocketChannelBuilder;
+        final errors = <Object>[];
+        final readyCompleter = Completer<void>();
+
+        final fakeChannel = _FakeWebSocketChannel(
+          stream: const Stream.empty(),
+          sink: _FakeWebSocketSink(
+            onAdd: (_) => throw StateError('late onReady add failed'),
+          ),
+          ready: readyCompleter.future,
+        );
+
+        ws_impl.webSocketConnector =
+            (
+              url, {
+              protocols,
+              headers,
+              pingInterval,
+            }) async => Object();
+        ws_impl.webSocketChannelBuilder = (socket) => fakeChannel;
+
+        try {
+          final ws = WebSocket(
+            Uri.parse('ws://example.test'),
+            backoff: NoBackoff(),
+            onMessage: (_) {},
+            onError: (error, _) => errors.add(error),
+          );
+
+          final firstInit = ws.init();
+          final secondInit = ws.init(onReady: 'late');
+          readyCompleter.complete();
+          await Future.wait([firstInit, secondInit]);
+
+          final disconnected = await ws.connection.firstWhere(
+            (state) => state is Disconnected,
+          );
+          expect(disconnected, isA<Disconnected>());
+          expect(
+            errors.whereType<StateError>().map((e) => e.message),
+            contains('late onReady add failed'),
+          );
+        } finally {
           ws_impl.webSocketConnector = originalConnector;
           ws_impl.webSocketChannelBuilder = originalBuilder;
         }

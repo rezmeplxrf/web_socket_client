@@ -15,8 +15,8 @@ abstract class Connection extends Stream<ConnectionState> {
 class ConnectionController extends Connection {
   /// {@macro connection_controller}
   ConnectionController()
-      : _state = const Connecting(),
-        _controller = StreamController<ConnectionState>.broadcast();
+    : _state = const Connecting(),
+      _controller = StreamController<ConnectionState>.broadcast();
 
   ConnectionState _state;
   final StreamController<ConnectionState> _controller;
@@ -31,17 +31,37 @@ class ConnectionController extends Connection {
     void Function()? onDone,
     bool? cancelOnError,
   }) {
-    return _stream.distinct().listen(
-          onData,
-          onError: onError,
-          onDone: onDone,
-          cancelOnError: cancelOnError,
-        );
-  }
+    late StreamController<ConnectionState> controller;
+    StreamSubscription<ConnectionState>? sourceSubscription;
 
-  Stream<ConnectionState> get _stream async* {
-    yield _state;
-    yield* _controller.stream;
+    controller = StreamController<ConnectionState>(
+      sync: true,
+      onListen: () {
+        var lastEmitted = _state;
+        controller.add(lastEmitted);
+        sourceSubscription = _controller.stream.listen(
+          (state) {
+            if (state == lastEmitted) {
+              return;
+            }
+            lastEmitted = state;
+            controller.add(state);
+          },
+          onError: controller.addError,
+          onDone: controller.close,
+        );
+      },
+      onPause: () => sourceSubscription?.pause(),
+      onResume: () => sourceSubscription?.resume(),
+      onCancel: () => sourceSubscription?.cancel(),
+    );
+
+    return controller.stream.listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
   }
 
   /// Notifies listeners of a new connection [state].

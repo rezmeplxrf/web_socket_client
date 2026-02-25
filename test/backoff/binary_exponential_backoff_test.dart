@@ -57,14 +57,15 @@ void main() {
     });
 
     test('reset restores initial state', () {
-      final backoff = BinaryExponentialBackoff(
-        initial: Duration(milliseconds: 100),
-        maximumStep: 7,
-      )
-        ..next() // 100ms
-        ..next() // 200ms
-        ..next() // 400ms
-        ..reset();
+      final backoff =
+          BinaryExponentialBackoff(
+              initial: Duration(milliseconds: 100),
+              maximumStep: 7,
+            )
+            ..next() // 100ms
+            ..next() // 200ms
+            ..next() // 400ms
+            ..reset();
 
       final first = backoff.next();
       final second = backoff.next();
@@ -136,6 +137,26 @@ void main() {
       expect(last, equals(Duration(milliseconds: 1600)));
       // Subsequent calls remain capped
       expect(backoff.next(), equals(Duration(milliseconds: 1600)));
+    });
+
+    test('asserts on non-positive maximumStep', () {
+      expect(
+        () => BinaryExponentialBackoff(
+          initial: Duration(milliseconds: 100),
+          maximumStep: 0,
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
+    test('asserts on negative initial duration', () {
+      expect(
+        () => BinaryExponentialBackoff(
+          initial: Duration(seconds: -1),
+          maximumStep: 2,
+        ),
+        throwsA(isA<AssertionError>()),
+      );
     });
   });
 }

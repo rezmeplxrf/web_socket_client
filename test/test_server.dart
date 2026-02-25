@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -12,6 +13,10 @@ class TestServer {
     final handler = webSocketHandler((webSocket, _) {
       webSocket.stream.listen((message) {
         if (message is String) {
+          if (message == '__server_close__') {
+            unawaited(webSocket.sink.close(4001, 'server closed connection'));
+            return;
+          }
           webSocket.sink.add('echo $message');
         } else if (message is List<int>) {
           // Decode binary as UTF-8 and echo as text

@@ -118,14 +118,23 @@ class WebSocket {
     _onError?.call(error, stackTrace ?? StackTrace.empty);
   }
 
+  Future<void> _sendOnReady(String message) async {
+    try {
+      _channel?.sink.add(message);
+    } catch (error, stackTrace) {
+      _reportError(error, stackTrace);
+      await attemptToReconnect(error, stackTrace);
+    }
+  }
+
   Future<void> init({String? onReady}) {
     if (_isConnected) return Future.value();
 
     if (_initFuture != null) {
       if (onReady != null) {
-        return _initFuture!.whenComplete(() {
+        return _initFuture!.whenComplete(() async {
           if (_isConnected) {
-            _channel?.sink.add(onReady);
+            await _sendOnReady(onReady);
           }
         });
       }
@@ -183,7 +192,7 @@ class WebSocket {
             // ignore: avoid_print
             print(
               'Received non-string WebSocket message of type '
-              '"${msg.runtimeType}" without onOtherMessage handler. '
+              '"${msg.runtimeType}" without onOtherMessage handler. ',
             );
           }
         },
@@ -210,7 +219,7 @@ class WebSocket {
         default:
       }
       if (onReady != null) {
-        _channel?.sink.add(onReady);
+        await _sendOnReady(onReady);
       }
     } finally {
       _initFuture = null;

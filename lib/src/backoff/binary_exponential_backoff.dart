@@ -26,8 +26,10 @@ class BinaryExponentialBackoff implements Backoff {
   BinaryExponentialBackoff({
     required this.initial,
     required this.maximumStep,
-  })  : _currentStep = 1,
-        _current = initial;
+  }) : _currentStep = 1,
+       assert(initial.inMicroseconds >= 0, 'initial must be non-negative'),
+       assert(maximumStep > 0, 'maximumStep must be greater than zero'),
+       _current = initial;
 
   /// The initial backoff duration.
   final Duration initial;

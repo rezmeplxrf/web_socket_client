@@ -3,6 +3,8 @@
 A reusable Dart `WebSocket` client with reconnect support and connection state
 tracking.
 
+This fork targets `dart:io` runtimes (VM/server). Web/wasm is not supported.
+
 ## Quick Start
 
 ```dart

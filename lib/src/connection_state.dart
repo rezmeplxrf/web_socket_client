@@ -136,7 +136,8 @@ class Disconnected extends ConnectionState {
   final String? reason;
 
   @override
-  int get hashCode => Object.hashAll([runtimeType, code, reason, error]);
+  int get hashCode =>
+      Object.hashAll([runtimeType, code, reason, error, stackTrace]);
 
   @override
   bool operator ==(Object other) {

@@ -3,6 +3,7 @@
 - feat: add optional `onOtherMessage` callback to handle non-`String` frames.
 - change: non-`String` frames no longer trigger reconnect/error when `onOtherMessage` is unset; they are ignored with a log entry.
 - test: add regression coverage for `onOtherMessage` and fallback ignore behavior.
+- docs: clarify this fork is IO-only and does not support wasm/web runtimes.
 
 # 0.2.2
 
@@ -19,7 +20,7 @@
 # 0.2.0
 
 - **BREAKING** refactor: make `ConnectionState` a `sealed` class
-- feat: add wasm compatibility
+- docs: removed previous wasm compatibility claim; this fork targets IO runtimes.
 - feat: add `protocol` getter to `WebSocket`
 - fix: cancel subscription on `close` or `reconnect`
 - fix: `invalid_runtime_check_with_js_interop_types`

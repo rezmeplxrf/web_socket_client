@@ -1,9 +1,27 @@
 import 'dart:async';
+import 'dart:io' as io;
 
+import 'package:meta/meta.dart';
 import 'package:web_socket_client/src/_web_socket_channel/_web_socket_channel_io.dart';
 import 'package:web_socket_client/src/_web_socket_connect/_web_socket_connect_io.dart';
 import 'package:web_socket_client/src/connection.dart';
 import 'package:web_socket_client/web_socket_client.dart';
+
+typedef WebSocketConnector =
+    Future<Object> Function(
+      String url, {
+      Iterable<String>? protocols,
+      Map<String, dynamic>? headers,
+      Duration? pingInterval,
+    });
+typedef WebSocketChannelBuilder = WebSocketChannel Function(Object socket);
+
+@visibleForTesting
+WebSocketConnector webSocketConnector = connect;
+
+@visibleForTesting
+WebSocketChannelBuilder webSocketChannelBuilder = (socket) =>
+    getWebSocketChannel(socket as io.WebSocket);
 
 Backoff _defaultBackoff() => BinaryExponentialBackoff(
   initial: const Duration(milliseconds: 100),
@@ -21,6 +39,7 @@ class WebSocket {
   WebSocket(
     Uri uri, {
     required void Function(String message) onMessage,
+    void Function(Object? message)? onOtherMessage,
     void Function(Object error, StackTrace stackTrace)? onError,
     Iterable<String>? protocols,
     Duration? pingInterval,
@@ -29,6 +48,7 @@ class WebSocket {
     Duration? timeout,
   }) : _uri = uri,
        _onMessage = onMessage,
+       _onOtherMessage = onOtherMessage,
        _onError = onError,
        _protocols = protocols,
        _pingInterval = pingInterval,
@@ -36,6 +56,7 @@ class WebSocket {
        _backoff = backoff ?? _defaultBackoff(),
        _timeout = timeout ?? _defaultTimeout;
   final void Function(String message) _onMessage;
+  final void Function(Object? message)? _onOtherMessage;
   final void Function(Object error, StackTrace stackTrace)? _onError;
   final Uri _uri;
   final Iterable<String>? _protocols;
@@ -132,7 +153,7 @@ class WebSocket {
         }
         _channel = null;
         _subscription = null;
-        final ws = await connect(
+        final ws = await webSocketConnector(
           _uri.toString(),
           protocols: _protocols,
           headers: _headers,
@@ -140,11 +161,13 @@ class WebSocket {
         ).timeout(_timeout);
 
         if (_isClosedByClient) {
-          await ws.close();
+          if (ws case final io.WebSocket socket) {
+            await socket.close();
+          }
           return;
         }
 
-        _channel = getWebSocketChannel(ws);
+        _channel = webSocketChannelBuilder(ws);
       } catch (error, stackTrace) {
         await attemptToReconnect(error, stackTrace);
         return;
@@ -154,11 +177,13 @@ class WebSocket {
         (msg) {
           if (msg is String) {
             _onMessage(msg);
-          } else if (_onError != null) {
-            _reportError(
-              StateError(
-                'Unexpected message type "${msg.runtimeType}" received from WebSocket stream.',
-              ),
+          } else if (_onOtherMessage != null) {
+            _onOtherMessage(msg);
+          } else {
+            // ignore: avoid_print
+            print(
+              'Received non-string WebSocket message of type '
+              '"${msg.runtimeType}" without onOtherMessage handler. '
             );
           }
         },
@@ -171,11 +196,12 @@ class WebSocket {
 
       try {
         await _channel?.ready;
-      } catch (e) {
-        await attemptToReconnect(Exception('Connection Timeout: $e'));
+      } catch (error, stackTrace) {
+        await attemptToReconnect(error, stackTrace);
         return;
       }
 
+      _backoff.reset();
       switch (_connectionController.state) {
         case Reconnecting():
           _connectionController.add(const Reconnected());
@@ -233,21 +259,28 @@ class WebSocket {
   /// Closes the connection and frees any resources.
   Future<void> close([int? code, String? reason]) async {
     if (_isClosedByClient) return;
+    _isClosedByClient = true;
+    _backoffTimer?.cancel();
+    _backoff.reset();
+    if (_isConnected) _connectionController.add(const Disconnecting());
+
     try {
-      _isClosedByClient = true;
-      _backoffTimer?.cancel();
-      _backoff.reset();
-      if (_isConnected) _connectionController.add(const Disconnecting());
       await _channel?.sink.close(code, reason);
+    } catch (error, stackTrace) {
+      _reportError(error, stackTrace);
+    }
+
+    try {
       await _subscription?.cancel();
+    } catch (error, stackTrace) {
+      _reportError(error, stackTrace);
+    } finally {
       _subscription = null;
       _channel = null;
       if (_connectionController.state is! Disconnected) {
         _connectionController.add(Disconnected(code: code, reason: reason));
       }
       _connectionController.close();
-    } catch (error, stackTrace) {
-      _reportError(error, stackTrace);
     }
   }
 }

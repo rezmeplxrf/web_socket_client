@@ -1,3 +1,9 @@
+# 0.2.3
+
+- feat: add optional `onOtherMessage` callback to handle non-`String` frames.
+- change: non-`String` frames no longer trigger reconnect/error when `onOtherMessage` is unset; they are ignored with a log entry.
+- test: add regression coverage for `onOtherMessage` and fallback ignore behavior.
+
 # 0.2.2
 
 - fix: create a fresh default `BinaryExponentialBackoff` per `WebSocket` instance.

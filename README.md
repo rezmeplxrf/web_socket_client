@@ -100,6 +100,22 @@ final socket = WebSocket(
 );
 ```
 
+## Other Message Types
+
+Use `onOtherMessage` to handle non-`String` frames (for example binary payloads).
+If `onOtherMessage` is not provided, non-`String` frames are ignored and a log
+entry is emitted.
+
+```dart
+final socket = WebSocket(
+  Uri.parse('ws://localhost:8080'),
+  onMessage: print,
+  onOtherMessage: (message) {
+    print('non-string message: $message (${message.runtimeType})');
+  },
+);
+```
+
 ## Closing
 
 Calling `close()`:

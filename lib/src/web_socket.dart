@@ -24,8 +24,8 @@ WebSocketChannelBuilder webSocketChannelBuilder = (socket) =>
     getWebSocketChannel(socket as io.WebSocket);
 
 Backoff _defaultBackoff() => BinaryExponentialBackoff(
-  initial: const Duration(milliseconds: 100),
-  maximumStep: 10,
+  initial: const Duration(milliseconds: 400),
+  maximumStep: 5,
 );
 
 /// The default connection timeout duration.

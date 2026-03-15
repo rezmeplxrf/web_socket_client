@@ -1,6 +1,6 @@
 name: web_socket_client
 description: Fork of web_socket_client.
-version: 0.2.4
+version: 0.2.5
 topics: [web-socket, web-socket-client]
 publish_to: none
 
@@ -10,7 +10,7 @@ environment:
 dependencies:
   meta: ^1.17.0
   schedulers:
-    git: https://github.com/rezmeplxrf/schedulers_dart.git
+    path: ../schedulers_dart
   web_socket_channel: ^3.0.3
 dev_dependencies:
   mocktail: ^1.0.0

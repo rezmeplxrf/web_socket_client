@@ -1,8 +1,12 @@
 // ignore_for_file: unnecessary_lambdas, prefer_const_constructors, unawaited_futures
 
 import 'dart:async';
+
+import 'package:schedulers/schedulers.dart';
 import 'package:test/test.dart';
+import 'package:web_socket_client/src/web_socket.dart' as internal_ws;
 import 'package:web_socket_client/web_socket_client.dart';
+
 import 'test_server.dart';
 
 void main() {
@@ -388,6 +392,373 @@ void main() {
       );
       expect(ws.send('not-connected'), isFalse);
     });
+
+    test(
+      'connectionAttemptRateLimiter wraps init and reconnect upgrade attempts',
+      () async {
+        final rateLimiter = RateScheduler(1, const Duration(milliseconds: 25));
+        final attemptStarted = <DateTime>[];
+        final originalConnector = internal_ws.webSocketConnector;
+        internal_ws.webSocketConnector =
+            (
+              url, {
+              protocols,
+              headers,
+              pingInterval,
+            }) {
+              attemptStarted.add(DateTime.now());
+              return originalConnector(
+                url,
+                protocols: protocols,
+                headers: headers,
+                pingInterval: pingInterval,
+              );
+            };
+        addTearDown(() {
+          internal_ws.webSocketConnector = originalConnector;
+        });
+
+        final ws = WebSocket(
+          testServer.uri,
+          onMessage: (_) {},
+          connectionAttemptRateLimiter: rateLimiter,
+          backoff: ConstantBackoff(const Duration(milliseconds: 10)),
+          timeout: const Duration(milliseconds: 400),
+        );
+
+        await ws.init();
+        await ws.connection.firstWhere((s) => s is Connected);
+        expect(attemptStarted, hasLength(1));
+
+        unawaited(ws.attemptToReconnect(Exception('trigger reconnect')));
+        await ws.connection.firstWhere((s) => s is Reconnecting);
+        await ws.connection.firstWhere((s) => s is Reconnected);
+
+        expect(attemptStarted, hasLength(2));
+        expect(
+          attemptStarted.last.difference(attemptStarted.first),
+          greaterThanOrEqualTo(const Duration(milliseconds: 25)),
+        );
+
+        await ws.close();
+      },
+    );
+
+    test(
+      'global connectionAttemptRateLimiter is shared across WebSocket instances',
+      () async {
+        final originalConnector = internal_ws.webSocketConnector;
+        final originalGlobalLimiter =
+            WebSocket.globalConnectionAttemptRateLimiter;
+        final attemptStarted = <DateTime>[];
+
+        WebSocket.globalConnectionAttemptRateLimiter = RateScheduler(
+          1,
+          const Duration(milliseconds: 25),
+        );
+        internal_ws.webSocketConnector =
+            (
+              url, {
+              protocols,
+              headers,
+              pingInterval,
+            }) {
+              attemptStarted.add(DateTime.now());
+              return originalConnector(
+                url,
+                protocols: protocols,
+                headers: headers,
+                pingInterval: pingInterval,
+              );
+            };
+
+        addTearDown(() {
+          WebSocket.globalConnectionAttemptRateLimiter = originalGlobalLimiter;
+          internal_ws.webSocketConnector = originalConnector;
+        });
+
+        final ws1 = WebSocket(testServer.uri, onMessage: (_) {});
+        final ws2 = WebSocket(testServer.uri, onMessage: (_) {});
+
+        await Future.wait([ws1.init(), ws2.init()]);
+        await Future.wait([
+          ws1.connection.firstWhere((s) => s is Connected),
+          ws2.connection.firstWhere((s) => s is Connected),
+        ]);
+
+        expect(attemptStarted, hasLength(2));
+        expect(
+          attemptStarted.last.difference(attemptStarted.first),
+          greaterThanOrEqualTo(const Duration(milliseconds: 25)),
+        );
+
+        await ws1.close();
+        await ws2.close();
+      },
+    );
+
+    test(
+      'global connectionAttemptRateLimiter also gates later-created WebSocket instances',
+      () async {
+        final originalConnector = internal_ws.webSocketConnector;
+        final originalGlobalLimiter =
+            WebSocket.globalConnectionAttemptRateLimiter;
+        final attemptStarted = <DateTime>[];
+
+        WebSocket.globalConnectionAttemptRateLimiter = RateScheduler(
+          1,
+          const Duration(milliseconds: 25),
+        );
+        internal_ws.webSocketConnector =
+            (
+              url, {
+              protocols,
+              headers,
+              pingInterval,
+            }) {
+              attemptStarted.add(DateTime.now());
+              return originalConnector(
+                url,
+                protocols: protocols,
+                headers: headers,
+                pingInterval: pingInterval,
+              );
+            };
+
+        addTearDown(() {
+          WebSocket.globalConnectionAttemptRateLimiter = originalGlobalLimiter;
+          internal_ws.webSocketConnector = originalConnector;
+        });
+
+        final ws1 = WebSocket(testServer.uri, onMessage: (_) {});
+        await ws1.init();
+        await ws1.connection.firstWhere((s) => s is Connected);
+
+        final ws2 = WebSocket(testServer.uri, onMessage: (_) {});
+        final ws3 = WebSocket(testServer.uri, onMessage: (_) {});
+        await Future.wait([ws2.init(), ws3.init()]);
+        await Future.wait([
+          ws2.connection.firstWhere((s) => s is Connected),
+          ws3.connection.firstWhere((s) => s is Connected),
+        ]);
+
+        expect(attemptStarted, hasLength(3));
+        final laterAttempts = attemptStarted.skip(1).toList();
+        expect(
+          laterAttempts.last.difference(laterAttempts.first),
+          greaterThanOrEqualTo(const Duration(milliseconds: 25)),
+        );
+
+        await ws1.close();
+        await ws2.close();
+        await ws3.close();
+      },
+    );
+
+    test(
+      'global connectionAttemptRateLimiter is respected across init and reconnect bursts',
+      () async {
+        final originalConnector = internal_ws.webSocketConnector;
+        final originalGlobalLimiter =
+            WebSocket.globalConnectionAttemptRateLimiter;
+        final attemptStarted = <DateTime>[];
+
+        WebSocket.globalConnectionAttemptRateLimiter = RateScheduler(
+          1,
+          const Duration(milliseconds: 25),
+        );
+        internal_ws.webSocketConnector =
+            (
+              url, {
+              protocols,
+              headers,
+              pingInterval,
+            }) {
+              attemptStarted.add(DateTime.now());
+              return originalConnector(
+                url,
+                protocols: protocols,
+                headers: headers,
+                pingInterval: pingInterval,
+              );
+            };
+
+        addTearDown(() {
+          WebSocket.globalConnectionAttemptRateLimiter = originalGlobalLimiter;
+          internal_ws.webSocketConnector = originalConnector;
+        });
+
+        final sockets = List.generate(
+          3,
+          (_) => WebSocket(
+            testServer.uri,
+            onMessage: (_) {},
+            backoff: ConstantBackoff(const Duration(milliseconds: 10)),
+            timeout: const Duration(milliseconds: 400),
+          ),
+        );
+
+        await Future.wait(sockets.map((socket) => socket.init()));
+        await Future.wait(
+          sockets.map((socket) => socket.connection.firstWhere((s) => s is Connected)),
+        );
+
+        expect(attemptStarted, hasLength(3));
+        expect(
+          attemptStarted.last.difference(attemptStarted.first),
+          greaterThanOrEqualTo(const Duration(milliseconds: 40)),
+        );
+
+        final baselineAttempts = attemptStarted.length;
+        await Future.wait(
+          sockets.map(
+            (socket) => socket.attemptToReconnect(
+              Exception('trigger reconnect burst'),
+            ),
+          ),
+        );
+        await Future.wait(
+          sockets.map(
+            (socket) => socket.connection.firstWhere(
+              (s) => s is Reconnected || s is Connected,
+            ),
+          ),
+        );
+
+        final reconnectAttempts = attemptStarted.skip(baselineAttempts).toList();
+        expect(reconnectAttempts, hasLength(3));
+        expect(
+          reconnectAttempts.last.difference(reconnectAttempts.first),
+          greaterThanOrEqualTo(const Duration(milliseconds: 40)),
+        );
+
+        await Future.wait(sockets.map((socket) => socket.close()));
+      },
+    );
+
+    test(
+      'instance limiter override bypasses global limiter for that WebSocket only',
+      () async {
+        final originalConnector = internal_ws.webSocketConnector;
+        final originalGlobalLimiter =
+            WebSocket.globalConnectionAttemptRateLimiter;
+        final attemptStarted = <DateTime>[];
+
+        WebSocket.globalConnectionAttemptRateLimiter = RateScheduler(
+          1,
+          const Duration(milliseconds: 25),
+        );
+        internal_ws.webSocketConnector =
+            (
+              url, {
+              protocols,
+              headers,
+              pingInterval,
+            }) {
+              attemptStarted.add(DateTime.now());
+              return originalConnector(
+                url,
+                protocols: protocols,
+                headers: headers,
+                pingInterval: pingInterval,
+              );
+            };
+
+        addTearDown(() {
+          WebSocket.globalConnectionAttemptRateLimiter = originalGlobalLimiter;
+          internal_ws.webSocketConnector = originalConnector;
+        });
+
+        final defaultWs = WebSocket(testServer.uri, onMessage: (_) {});
+        final bypassWs = WebSocket(
+          testServer.uri,
+          onMessage: (_) {},
+          useGlobalConnectionAttemptRateLimiter: false,
+        );
+
+        await Future.wait([defaultWs.init(), bypassWs.init()]);
+        await Future.wait([
+          defaultWs.connection.firstWhere((s) => s is Connected),
+          bypassWs.connection.firstWhere((s) => s is Connected),
+        ]);
+
+        expect(attemptStarted, hasLength(2));
+        expect(
+          attemptStarted.last.difference(attemptStarted.first),
+          lessThan(const Duration(milliseconds: 25)),
+        );
+
+        await defaultWs.close();
+        await bypassWs.close();
+      },
+    );
+
+    test(
+      'separate instance connectionAttemptRateLimiters do not become global across WebSockets',
+      () async {
+        final originalConnector = internal_ws.webSocketConnector;
+        final originalGlobalLimiter =
+            WebSocket.globalConnectionAttemptRateLimiter;
+        final attemptStarted = <DateTime>[];
+
+        WebSocket.globalConnectionAttemptRateLimiter = RateScheduler(
+          1,
+          const Duration(milliseconds: 25),
+        );
+        internal_ws.webSocketConnector =
+            (
+              url, {
+              protocols,
+              headers,
+              pingInterval,
+            }) {
+              attemptStarted.add(DateTime.now());
+              return originalConnector(
+                url,
+                protocols: protocols,
+                headers: headers,
+                pingInterval: pingInterval,
+              );
+            };
+
+        addTearDown(() {
+          WebSocket.globalConnectionAttemptRateLimiter = originalGlobalLimiter;
+          internal_ws.webSocketConnector = originalConnector;
+        });
+
+        final ws1 = WebSocket(
+          testServer.uri,
+          onMessage: (_) {},
+          connectionAttemptRateLimiter: RateScheduler(
+            1,
+            const Duration(milliseconds: 25),
+          ),
+        );
+        final ws2 = WebSocket(
+          testServer.uri,
+          onMessage: (_) {},
+          connectionAttemptRateLimiter: RateScheduler(
+            1,
+            const Duration(milliseconds: 25),
+          ),
+        );
+
+        await Future.wait([ws1.init(), ws2.init()]);
+        await Future.wait([
+          ws1.connection.firstWhere((s) => s is Connected),
+          ws2.connection.firstWhere((s) => s is Connected),
+        ]);
+
+        expect(attemptStarted, hasLength(2));
+        expect(
+          attemptStarted.last.difference(attemptStarted.first),
+          lessThan(const Duration(milliseconds: 25)),
+        );
+
+        await ws1.close();
+        await ws2.close();
+      },
+    );
 
     test('server initiated close emits close info and reconnects', () async {
       final messages = <String>[];
